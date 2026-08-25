@@ -5,6 +5,9 @@
 
     Assign.layout = Marionette.Layout.extend({
       template: "#crm-vol-assign-layout-tpl",
+      templateHelpers: function() {
+        return {projectTitle: volunteerApp.project_title};
+      },
       regions: {
         flexibleRegion: "#crm-vol-assign-flexible-region",
         scheduledRegion: "#crm-vol-assign-scheduled-region"
@@ -42,10 +45,11 @@
         'click a.crm-vol-menu-parent': function () {return false;},
         'click a.crm-vol-menu-button': function() {
           $('.crm-vol-menu-items').remove();
+          this.$('.crm-vol-menu-button').attr('aria-expanded', 'true');
           var $menu = $($('#crm-vol-menu-tpl').html());
           $((this.isFlexible ? '' : '.crm-vol-menu-move-to, ') + '.crm-vol-menu-copy-to', $menu).append(menuItemTemplate({
             cid: 'flexible',
-            title: '<em>' + ts('Available Volunteers') + '</em>',
+            title: ts('Available Volunteers'),
             time: ''
           }));
           $.each(Assign.scheduledView.getOpenSlots(this.$el), function() {
@@ -72,10 +76,10 @@
       hasBeenInitialized: false,
       profileUrl: '',
       itemViewContainer: '.crm-vol-assignment-list',
-      className: 'crm-vol-need crm-form-block',
+      className: 'crm-vol-need crm-form-block panel panel-default',
 
       initialize: function() {
-        this.collection = new volunteerApp.Entities.Assignments(_.toArray(this.model.get('api.volunteer_assignment.get').values));
+        this.collection = new volunteerApp.Entities.Assignments(_.toArray(this.model.get('assignments') || []));
         var type = this.model.get('is_flexible') == '1' ? 'flexible' : 'scheduled';
         this.isFlexible = !(type == 'scheduled');
         this.template = '#crm-vol-' + type + '-tpl';
@@ -91,12 +95,18 @@
         'click .crm-vol-menu-item a': 'moveContact',
         'click .crm-vol-del': 'removeContact',
         'click .crm-vol-search': function (e) {
+          if ($(e.currentTarget).hasClass('disabled')) {
+            e.preventDefault();
+            return false;
+          }
           var Search = CRM.volunteerApp.module('Search');
           $('#crm-volunteer-search-dialog').dialog(Search.dialogSettings);
 
           var params = {
             need_id: this.model.get('id'),
-            cnt_open_assignments: this.model.get('quantity') - this.collection.length
+            cnt_open_assignments: parseInt(this.model.get('quantity'), 10) > 0
+              ? parseInt(this.model.get('quantity'), 10) - this.collection.length
+              : 25
           };
           Search.start(params);
           e.preventDefault();
@@ -127,7 +137,7 @@
 
       // Adds a cloned or existing assignment to the view
       addAssignment: function(assignment) {
-        var thisView = this, statusMsg = {};
+        var thisView = this, statusMsg = '';
         assignment.set('volunteer_need_id', this.model.get('id'));
         this.collection.add(assignment);
         var status = _.invert(CRM.pseudoConstant.volunteer_status),
@@ -138,21 +148,29 @@
             volunteer_role_id: this.model.get('role_id'),
             status_id: status[this.isFlexible ? 'Available' : 'Scheduled']
           };
-        // Move record
-        if (assignment.get('id')) {
-          params.id = assignment.get('id');
-          statusMsg = {success: ts('Volunteer Moved')};
+        // APIv3's create doubled as an update when given an ID; API4 keeps the
+        // two apart, so a move updates and a clone creates.
+        var existingId = assignment.get('id');
+        var write;
+        if (existingId) {
+          statusMsg = ts('Volunteer Moved');
+          write = CRM.api4('VolunteerAssignment', 'update', {
+            where: [['id', '=', existingId]],
+            values: params
+          });
         }
-        // Clone record
         else {
           _.extend(params, _.pick(assignment.attributes, 'contact_id', 'details'));
-          statusMsg = {success: ts('Volunteer Copied')};
+          statusMsg = ts('Volunteer Copied');
+          write = CRM.api4('VolunteerAssignment', 'create', {values: params});
         }
-        CRM.api3('volunteer_assignment', 'create', params, statusMsg)
-          .done(function(result) {
-            assignment.set('id', result.id);
+        write.then(function(saved) {
+            assignment.set('id', saved[0].id);
             // refresh the data-id property and even-odd rows
             thisView.render();
+            CRM.status(statusMsg);
+          }, function(error) {
+            CRM.alert(error && error.error_message, ts('Error'), 'error');
           });
       },
 
@@ -162,21 +180,46 @@
         }
         var thisView = this;
         this.isFlexible && $('input[name=add-volunteer]', this.$el).crmEntityRef({create: true});
-        var quantity = this.model.get('quantity');
-        var vacanciesRemain = quantity > this.collection.length;
-        this.$('.crm-vol-search').toggleClass('disabled', !vacanciesRemain);
+        var quantity = parseInt(this.model.get('quantity'), 10) || 0;
+        var assigned = this.collection.length;
+        var vacanciesRemain = !quantity || quantity > assigned;
+        this.$('.crm-vol-search')
+          .toggleClass('disabled', !vacanciesRemain)
+          .attr('aria-disabled', !vacanciesRemain ? 'true' : 'false');
         $('.crm-vol-vacancy, .crm-vol-placeholder', this.$el).remove();
-        if (vacanciesRemain) {
-          var delta = quantity - this.collection.length;
-          var msg = this.collection.length ? ts('%1 More Needed', {1: delta}) : ts('%1 Needed', {1: delta});
-          $('.crm-vol-assignment-list', this.$el).append('<tr class="crm-vol-vacancy"><td colspan="3">' + msg + '</td></tr>');
+        var $summary = this.$('.crm-vol-capacity-summary')
+          .removeClass('is-open is-full is-over is-unlimited');
+        if (quantity) {
+          this.$('.crm-vol-capacity').text(ts('%1 of %2 assigned', {1: assigned, 2: quantity}));
+          if (assigned < quantity) {
+            var delta = quantity - assigned;
+            $summary.addClass('is-open');
+            this.$('.crm-vol-capacity-detail').text(ts('%1 more needed', {1: delta}));
+          }
+          else if (assigned === quantity) {
+            $summary.addClass('is-full');
+            this.$('.crm-vol-capacity-detail').text(ts('Fully staffed'));
+          }
+          else {
+            $summary.addClass('is-over');
+            this.$('.crm-vol-capacity-detail').text(ts('%1 over capacity', {1: assigned - quantity}));
+          }
         }
-        if (!quantity && !this.collection.length) {
-          $('.crm-vol-assignment-list', this.$el).append('<tr class="crm-vol-placeholder"><td colspan="3">' + ts('None') + '</td></tr>');
+        else {
+          $summary.addClass('is-unlimited');
+          this.$('.crm-vol-capacity').text(ts('%1 assigned', {1: assigned}));
+          this.$('.crm-vol-capacity-detail').text(ts('No capacity limit'));
+        }
+        if (!assigned) {
+          var colspan = this.isFlexible ? 1 : 3;
+          $('.crm-vol-assignment-list', this.$el).append(
+            '<tr class="crm-vol-placeholder"><td colspan="' + colspan + '">' + ts('No volunteers assigned yet') + '</td></tr>'
+          );
         }
         // Initialize draggable on any new objects
         $('.crm-vol-assignment:not(.ui-draggable)', this.$el).draggable({
           helper: "clone",
+          handle: '.crm-vol-drag',
           zIndex: 99999999999,
           cancel: '.crm-vol-menu',
           containment: '#crm-volunteer-dialog',
@@ -223,8 +266,10 @@
           var params = {
             contact_id: newContactId,
             volunteer_need_id: this.model.get('id'),
-            status_id: status['Available'],
-            activity_date_time: this.model.get('start_time')
+            status_id: status[this.isFlexible ? 'Available' : 'Scheduled'],
+            activity_date_time: this.model.get('start_time'),
+            volunteer_role_id: this.model.get('role_id'),
+            time_scheduled_minutes: this.model.get('duration')
           };
           this.collection.createNewAssignment(params);
         }
@@ -238,7 +283,9 @@
         CRM.confirm(function() {
           thisView.collection.remove(assignment);
           $('.crm-vol-menu-items').remove();
-          CRM.api3('volunteer_assignment', 'delete', {id: id}, true);
+          CRM.status({}, CRM.toJqPromise(
+            CRM.api4('VolunteerAssignment', 'delete', {where: [['id', '=', id]]})
+          ));
         }, {
           title: ts('Delete Volunteer'),
           message: ts('Remove %1 from %2?', {

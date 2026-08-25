@@ -8,6 +8,23 @@
       $rootScope._ = _;
     })
 
+    // The public opportunity browser and project management UI share this
+    // Angular module, but CiviCRM selects separate frontend/backend themes from
+    // the server-side host route. Redirect historical public-host management
+    // URLs so administrative screens use the configured backend theme.
+    .run(function($rootScope, $location, $window) {
+      $rootScope.$on('$routeChangeStart', function(event) {
+        if (!(CRM.config && CRM.config.isFrontend)
+          || !/^\/volunteer\/manage(?:\/|$)/.test($location.path())) {
+          return;
+        }
+
+        event.preventDefault();
+        var backendHost = CRM.url('civicrm/volunteer/manage', null, 'back');
+        $window.location.replace(backendHost + '#' + $location.url());
+      });
+    })
+
     // Show/hide "loading" spinner between routes
     .run(function($rootScope) {
       $rootScope.$on('$routeChangeStart', function() {
@@ -28,7 +45,43 @@
       CRM.$('#crm-main-content-wrapper').block();
     })
 
-    .factory('volOppSearch', ['crmApi', '$location', '$route', function(crmApi, $location, $route) {
+    // Administrative routes share this Angular module with the public
+    // opportunity browser. Server-side callbacks and APIs remain authoritative;
+    // this guard gives a clear client-side denial when someone changes only the
+    // public page's hash to an administrative route.
+    .factory('volProjectManagementAccess', function($q) {
+      return function() {
+        var allowed = CRM.checkPerm('create volunteer projects')
+          || CRM.checkPerm('edit own volunteer projects')
+          || CRM.checkPerm('edit all volunteer projects');
+        if (allowed) {
+          return true;
+        }
+
+        var message = CRM.ts('org.civicrm.volunteer')('You do not have permission to manage volunteer projects.');
+        CRM.alert(message, CRM.ts('org.civicrm.volunteer')('Access denied'), 'error');
+        return $q.reject({is_error: 1, error_message: message});
+      };
+    })
+
+    // The Search Kit hours report exposes contact-level data across all
+    // projects. Keep its workflow tab aligned with the report page and API4
+    // entity instead of treating ordinary project-edit access as sufficient.
+    .factory('volHoursReportAccess', function($q) {
+      return function() {
+        var allowed = CRM.checkPerm('edit all volunteer projects')
+          && CRM.checkPerm('view all contacts');
+        if (allowed) {
+          return true;
+        }
+
+        var message = CRM.ts('org.civicrm.volunteer')('You do not have permission to view the volunteer hours report.');
+        CRM.alert(message, CRM.ts('org.civicrm.volunteer')('Access denied'), 'error');
+        return $q.reject({is_error: 1, error_message: message});
+      };
+    })
+
+    .factory('volOppSearch', ['crmApi4', '$location', '$route', function(crmApi4, $location, $route) {
       //Search params and results are stored here and assigned by reference to the form
       var volOppSearch = {};
       var result = {};
@@ -78,14 +131,26 @@
           returnParams['proximity']['radius'] = parseFloat(returnParams['proximity']['radius']);
         }
 
+        // Angular preserves the brackets in `role_id[]=4`, so the generic
+        // nested parser above represents it as {'': '4'}. Normalize both that
+        // bookmark form and repeated role_id[] values for the multi-select and
+        // the API4 array parameter.
+        angular.forEach(['role_id', 'selected'], function(key) {
+          if (!returnParams[key]) {
+            return;
+          }
+          var values = angular.isArray(returnParams[key])
+            ? returnParams[key]
+            : (angular.isObject(returnParams[key])
+              ? _.values(returnParams[key])
+              : [returnParams[key]]);
+          returnParams[key] = _.flatten(values);
+        });
+
         return returnParams;
       };
 
       volOppSearch.params = parseQueryParams($route.current.params);
-
-      var clearResult = function() {
-        result = {};
-      };
 
       /**
        * Formats the search params for bookmarkable links.
@@ -115,9 +180,42 @@
         return CRM.$.param(searchParams);
       }
 
-      volOppSearch.search = function() {
-        clearResult();
+      /**
+       * Translate the form's filter names into API4 parameter names.
+       *
+       * The form and the bookmarkable URL keep APIv3's snake_case names;
+       * API4 action parameters are camelCase, and API4 refuses an unknown
+       * parameter outright rather than ignoring it.
+       *
+       * @param params
+       * @returns object
+       */
+      var toApi4SearchParams = function(params) {
+        var map = {
+          beneficiary: 'beneficiary',
+          project: 'project',
+          proximity: 'proximity',
+          role_id: 'roleId',
+          date_start: 'dateStart',
+          date_end: 'dateEnd',
+          timeFilter: 'timeFilter',
+          campaign_id: 'campaignId'
+        };
+        var api4Params = {};
+        angular.forEach(map, function(api4Name, formName) {
+          var value = params[formName];
+          if (value === undefined || value === null || value === '') {
+            return;
+          }
+          if (angular.isObject(value) && !angular.isArray(value) && _.isEmpty(value)) {
+            return;
+          }
+          api4Params[api4Name] = value;
+        });
+        return api4Params;
+      };
 
+      volOppSearch.search = function() {
         //Update the URL for bookmarkability
         $location.search(buildQueryString());
 
@@ -126,9 +224,35 @@
           volOppSearch.params.beneficiary = volOppSearch.params.beneficiary.split(',');
         }
 
-        return crmApi('VolunteerNeed', 'getsearchresult', volOppSearch.params).then(function(data) {
-          result = data.values;
-        });
+        // API4 resolves to the rows themselves rather than an APIv3 envelope.
+        // Replace the visible rows only after a successful response. A failed
+        // geocode should leave the last valid result set in place while the
+        // user corrects the location fields.
+        return crmApi4('VolunteerNeed', 'search', toApi4SearchParams(volOppSearch.params))
+          .then(function(needs) {
+            result = needs;
+          });
+      };
+
+      // Selection state belongs in the hash URL so Back to shifts can restore
+      // the cart without issuing another signup or relying on browser memory.
+      volOppSearch.setSelected = function(ids) {
+        volOppSearch.params.selected = (ids || []).map(String);
+        if (!volOppSearch.params.selected.length) {
+          delete volOppSearch.params.selected;
+        }
+        // Replace rather than push. Picking six shifts would otherwise leave
+        // six history entries, so the Back gesture -- the primary way people
+        // navigate on a phone -- rewinds the cart one shift at a time instead
+        // of leaving the page. Filter changes still push, because there Back
+        // undoing the filter is what the user means.
+        $location.search(buildQueryString()).replace();
+      };
+
+      volOppSearch.returnContext = function(ids) {
+        volOppSearch.setSelected(ids);
+        var query = buildQueryString();
+        return '/volunteer/opportunities' + (query ? '?' + query : '');
       };
 
       //We are returning this as a function because there is a bug that causes
@@ -145,14 +269,14 @@
     // Adds a class to the element for each volunteer permission the user has.
     // This does not provide security but a better UX; i.e., don't show me
     // buttons I can't use.
-    .directive('crmVolPermToClass', function(crmApi) {
+    .directive('crmVolPermToClass', function(crmApi4) {
       return {
         restrict: 'A',
         scope: {},
         link: function (scope, element, attrs) {
           var classes = [];
-          crmApi('VolunteerUtil', 'getperms').then(function(perms) {
-            angular.forEach(perms.values, function(value) {
+          crmApi4('VolunteerUtil', 'getPermissions').then(function(perms) {
+            angular.forEach(perms, function(value) {
               if (CRM.checkPerm(value.name) === true) {
                 classes.push('crm-vol-perm-' + value.safe_name);
               }
@@ -169,12 +293,20 @@
      * This is a service for loading the backbone-based volunteer UIs (and their
      * prerequisite scripts) into angular routes.
      */
-    .factory('volBackbone', function(crmApi, crmProfiles, $q) {
+    .factory('volBackbone', function(crmApi4, $q) {
+
+      var loadPromise = null;
+      var ts = CRM.ts('org.civicrm.volunteer');
 
       // This was done as a recursive function because the scripts must execute in order.
       function loadNextScript(scripts, callback, fail) {
         var script = scripts.shift();
-        CRM.$.getScript(script)
+        // Not $.getScript(): that hard-codes cache:false, appending a fresh
+        // timestamp to every request and re-downloading the whole Backbone
+        // stack each time a dialog opens. The URLs already carry CiviCRM's
+        // resource cache code, so they are safe to cache and are invalidated by
+        // a resource flush.
+        CRM.$.ajax({url: script, dataType: 'script', cache: true})
           .done(function(scriptData, status) {
             if(scripts.length > 0) {
               loadNextScript(scripts, callback, fail);
@@ -182,8 +314,16 @@
               callback();
             }
           }).fail(function(jqxhr, settings, exception) {
-            console.log(exception);
-            fail(exception);
+            var detail = exception && (exception.message || exception.toString());
+            var status = jqxhr.status ? 'HTTP ' + jqxhr.status : settings;
+            fail({
+              is_error: 1,
+              error_message: ts('Unable to load a required volunteer-management script: %1 (%2)', {
+                1: script,
+                2: [status, detail].filter(Boolean).join(': ')
+              }),
+              exception: exception
+            });
           });
       }
 
@@ -192,7 +332,13 @@
       }
 
       function loadStyleFile(url) {
-        CRM.$("#backbone_resources").append('<link rel="stylesheet" type="text/css" href="' + url + '" />');
+        // Idempotent: load() may run again after a failed attempt, and appending
+        // the same <link> repeatedly is pointless.
+        var container = CRM.$("#backbone_resources");
+        if (container.find('link[href="' + url + '"]').length) {
+          return;
+        }
+        container.append('<link rel="stylesheet" type="text/css" href="' + url + '" />');
       }
 
       /**
@@ -206,8 +352,17 @@
         var divId = 'volunteer_backbone_template_' + index;
 
         CRM.$("#volunteer_backbone_templates").append("<div id='" + divId + "'></div>");
-        CRM.$("#" + divId).load(CRM.url(url, {snippet: 5}), function(response) {
-          deferred.resolve(response);
+        CRM.$("#" + divId).load(CRM.url(url, {snippet: 5}), function(response, status, jqxhr) {
+          if (status === 'error') {
+            CRM.$("#" + divId).remove();
+            deferred.reject({
+              is_error: 1,
+              error_message: ts('Unable to load the volunteer-management templates.'),
+              status: jqxhr.status
+            });
+          } else {
+            deferred.resolve(response);
+          }
         });
 
         return deferred.promise;
@@ -215,6 +370,15 @@
 
       function loadScripts(scripts) {
         var deferred = $q.defer();
+
+        scripts = scripts.slice();
+        if (!scripts.length) {
+          deferred.reject({
+            is_error: 1,
+            error_message: ts('No volunteer-management scripts were provided.')
+          });
+          return deferred.promise;
+        }
 
         // What's this weird stuff going on with jQuery, you ask?
         //
@@ -236,13 +400,25 @@
           window._ = CRM._;
         }
 
-        loadNextScript(scripts, function () {
+        var restoreGlobals = function() {
           window.jQuery = CRM.origJQuery;
           delete CRM.origJQuery;
-          CRM.volunteerBackboneScripts = true;
-          deferred.resolve(true);
-        }, function(status) {
-          deferred.resolve(status);
+        };
+
+        loadNextScript(scripts, function () {
+          restoreGlobals();
+          if (CRM.volunteerApp) {
+            CRM.volunteerBackboneScripts = true;
+            deferred.resolve(true);
+          } else {
+            deferred.reject({
+              is_error: 1,
+              error_message: ts('The volunteer-management application did not initialize.')
+            });
+          }
+        }, function(error) {
+          restoreGlobals();
+          deferred.reject(error);
         });
 
         return deferred.promise;
@@ -251,31 +427,36 @@
       // TODO: Figure out a more authoritative way to check this, rather than
       // simply setting and checking a flag.
       function verifyScripts() {
-        return !!CRM.volunteerBackboneScripts;
+        return !!CRM.volunteerBackboneScripts && !!CRM.volunteerApp;
+      }
+      function verifyPrerequisites() {
+        return !!CRM.BB && !!CRM.BB.Marionette;
       }
       function verifyTemplates() {
-        return (angular.element("#volunteer_backbone_templates div").length > 0);
+        return (angular.element("#volunteer_backbone_templates #crm-vol-define-layout-tpl").length > 0);
       }
       function verifySettings() {
         return !!CRM.volunteerBackboneSettings;
       }
+      function verifyAll() {
+        return (verifyPrerequisites() && verifyScripts() && verifySettings()
+          && verifyTemplates() && !!CRM.volunteerAppStarted);
+      }
 
       return {
-        verify: function() {
-          return (!!window.Backbone && verifyScripts() && verifySettings() && verifyTemplates());
-        },
+        verify: verifyAll,
         load: function() {
-          var deferred = $q.defer();
-          var promises = [];
-          var preReqs = {};
-
-          preReqs.volunteer = crmApi('VolunteerUtil', 'loadbackbone');
-
-          if(!crmProfiles.verify()) {
-            preReqs.profiles = crmProfiles.load();
+          if (verifyAll()) {
+            return $q.resolve(true);
+          }
+          if (loadPromise) {
+            return loadPromise;
           }
 
-          $q.all(preReqs).then(function(resources) {
+          loadPromise = crmApi4('VolunteerUtil', 'loadBackbone').then(function(resourceResult) {
+            // loadBackbone describes one bundle, so API4 returns a single row.
+            var resources = resourceResult[0] || {};
+            var promises = [];
 
             if (CRM.$("#backbone_resources").length < 1) {
               CRM.$("body").append("<div id='backbone_resources'></div>");
@@ -288,40 +469,56 @@
             // The settings must be loaded before the libraries
             // because the libraries depend on the settings.
             if(!verifySettings()) {
-              loadSettings(resources.volunteer.values.settings);
+              loadSettings(resources.settings);
               CRM.volunteerBackboneSettings = true;
             }
 
             if(!verifyScripts()) {
-              promises.push(loadScripts(resources.volunteer.values.scripts));
+              var scripts = resources.scripts || [];
+              if (!verifyPrerequisites()) {
+                scripts = (resources.prerequisite_scripts || []).concat(scripts);
+              }
+              promises.push(loadScripts(scripts));
             }
 
             if(!verifyTemplates()) {
-              CRM.$.each(resources.volunteer.values.templates, function(index, url) {
+              CRM.$.each(resources.templates, function(index, url) {
                 promises.push(loadTemplate(index, url));
               });
             }
 
-            CRM.$.each(resources.volunteer.values.css, function(index, url) {
+            CRM.$.each(resources.css, function(index, url) {
               loadStyleFile(url);
             });
 
-            $q.all(promises).then(
-              function () {
-                //I'm not sure what normally triggers this event, but when cramming it
-                //into angular the event isn't triggered. So I'm doing it here, otherwise
-                //The backbone stuff fails.
-                CRM.volunteerApp.trigger("initialize:before");
-
-                deferred.resolve(true);
-              },
-              function () {
-                console.log("Failed to load all backbone resources");
-                deferred.reject(ts("Failed to load all backbone resources"));
+            return $q.all(promises).then(function() {
+              if (!verifyScripts()) {
+                return $q.reject({
+                  is_error: 1,
+                  error_message: ts('The volunteer-management application did not initialize.')
+                });
               }
-            );
+
+              // Start only after every module and its HTML templates are
+              // available. Starting from volunteer_app.js's DOM-ready callback
+              // races the asynchronous script/template requests and causes
+              // module initializers to render missing templates.
+              if (!CRM.volunteerAppStarted) {
+                CRM.volunteerApp.start();
+                CRM.volunteerAppStarted = true;
+              }
+              return true;
+            });
+          }).catch(function(error) {
+            loadPromise = null;
+            var message = error && error.error_message
+              ? error.error_message
+              : ts('Failed to load the volunteer-management interface.');
+            CRM.alert(message, ts('Error'), 'error');
+            return $q.reject(error);
           });
-          return deferred.promise;
+
+          return loadPromise;
         }
       };
     });

@@ -11,20 +11,23 @@ CRM.volunteerApp.module('Assign', function(Assign, volunteerApp, Backbone, Mario
 
   // Initialize entities and views
   Assign.on('start', function() {
-    volunteerApp.Entities.getNeeds({'api.volunteer_assignment.get': {}, 'is_active': 1})
+    volunteerApp.Entities.getNeeds({assignments: true, activeOnly: true})
       .done(function(arrData) {
+        var scheduledNeeds = volunteerApp.Entities.Needs.getScheduled(arrData);
         Assign.flexibleView = new Assign.needsView({
           collection: volunteerApp.Entities.Needs.getFlexible(arrData)
         });
         Assign.scheduledView = new Assign.needsView({
-          collection: volunteerApp.Entities.Needs.getScheduled(arrData)
+          collection: scheduledNeeds
         });
         layout.flexibleRegion.show(Assign.flexibleView);
         layout.scheduledRegion.show(Assign.scheduledView);
+        layout.$('#crm-vol-assign-empty').toggleClass('is-visible', scheduledNeeds.length === 0);
       });
     // Hide menu when clicking away
     $('body').on('click', ':not(".crm-vol-menu-items *")', function(e) {
       $('.crm-vol-menu-items').remove();
+      $('.crm-vol-menu-button').attr('aria-expanded', 'false');
     });
   });
   // Detach event handlers

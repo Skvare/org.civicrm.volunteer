@@ -33,9 +33,10 @@
     </select>
     <% if (!_.isEmpty(optionEditPath)) { %>
       <a href="<%= CRM.url(optionEditPath, {reset: 1}) %>"
-        class="crm-option-edit-link medium-popup crm-hover-button" target="_blank"
+        class="crm-option-edit-link medium-popup crm-hover-button" target="_blank" rel="noopener"
         title="Edit Options" data-option-edit-path="optionEditPath">
-        <span class="icon ui-icon-wrench"></span>
+        <i aria-hidden="true" class="crm-i fa-wrench"></i>
+        <span class="sr-only">Edit options</span>
       </a>
     <% } %>
   </div>

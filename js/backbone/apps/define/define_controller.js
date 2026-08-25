@@ -12,7 +12,7 @@ CRM.volunteerApp.module('Define', function(Define, volunteerApp, Backbone, Mario
   // Initialize entities and views
   Define.on('start', function() {
 
-    volunteerApp.Entities.getNeeds({'api.volunteer_assignment.getcount': {}})
+    volunteerApp.Entities.getNeeds({assignmentCounts: true})
       .done(function(arrData) {
         var collectionData = volunteerApp.Entities.Needs.getScheduled(arrData);
 

@@ -19,11 +19,13 @@ return array(
     'group' => 'org.civicrm.volunteer',
     'name' => 'volunteer_project_default_profiles',
     'type' => 'Array',
-    'default' => array(
-      "primary" => array(civicrm_api3('UFGroup', 'getvalue', array(
-        "name" => "volunteer_sign_up",
-        "return" => "id"
-      )))),
+    // Deliberately static. This file is metadata: CiviCRM scans and caches it,
+    // so an API call here ran on every settings-metadata cache miss -- and
+    // UFGroup.getvalue() throws when the volunteer_sign_up profile has been
+    // renamed or deleted, which turned a cache rebuild into a fatal. The
+    // volunteer_sign_up fallback is resolved lazily instead, by
+    // CRM_Volunteer_BAO_Project::composeDefaultSettingsArray().
+    'default' => NULL,
     'add' => '4.5',
     'is_domain' => 1,
     'is_contact' => 0,

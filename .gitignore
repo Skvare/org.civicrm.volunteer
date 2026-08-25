@@ -1,7 +1,11 @@
-*~
-*.bak
-bin/setup.conf
-.DS_Store
-update.sh
-.*
-/nbproject
+# PHPUnit run cache
+.phpunit.result.cache
+
+# PHPStan run cache
+.phpstan-cache/
+# Downloaded PHPUnit PHAR (tools/run-phpunit.sh)
+tools/.cache/
+
+# Local CiviCRM seed dump for the test runner. Regenerate with mysqldump
+# from any bootable CiviCRM 6.16 database; see .env.example and the README.
+tests/phpunit/seed/*.sql

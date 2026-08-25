@@ -36,33 +36,104 @@ CRM.volunteerApp.module('Entities', function(Entities, volunteerApp, Backbone, M
       // can distinguish between user-added models and ones that were already there
       need.set('userAdded', true);
       this.add(need);
-      return CRM.api3('volunteer_need', 'create', params, true)
-        .done(function(result) {
-          need.set('id', result.id);
+      // Callers use jQuery's .done(), and expect the new record, so bridge
+      // API4's native promise back onto a jQuery deferred. crmApi's fourth
+      // argument used to supply the saving/saved feedback; CRM.status does now.
+      var defer = CRM.$.Deferred();
+      CRM.status({}, defer.promise());
+      CRM.api4('VolunteerNeed', 'create', {values: params})
+        .then(function(created) {
+          need.set('id', created[0].id);
+          defer.resolve(created[0]);
+        }, function(error) {
+          defer.reject(error);
         });
+      return defer.promise();
    }
  });
 
-  Entities.getNeeds = function(params) {
-    defaults = {
-      'options': {'limit': 0}
-    };
-    params = params || {};
-    params = _.extend(defaults, params);
+  /**
+   * Fetch this project's needs, optionally with their assignments.
+   *
+   * @param {object} options
+   *   activeOnly: restrict to active needs.
+   *   assignments: attach each need's assignments as `assignments`.
+   *   assignmentCounts: attach each need's assignment tally as
+   *     `assignment_count`. Implied by `assignments`.
+   * @returns {Promise} Resolves with an array of need records.
+   */
+  Entities.getNeeds = function(options) {
+    options = options || {};
+    var wantAssignments = !!(options.assignments || options.assignmentCounts);
+
+    var where = [['project_id', '=', volunteerApp.project_id]];
+    if (options.activeOnly) {
+      where.push(['is_active', '=', true]);
+    }
 
     var defer = $.Deferred();
-    params.project_id = volunteerApp.project_id;
-    CRM.api('volunteer_need', 'get', params, {
-      success: function(data) {
-        // generate user-friendly date and time strings
-        $.each(data.values, function (k, v) {
-          formatDate(data.values[k]);
-        });
-        defer.resolve(_.toArray(data.values));
+    CRM.api4('VolunteerNeed', 'get', {
+      select: ['*'],
+      where: where,
+      limit: 0
+    }).then(function(rows) {
+      var needs = _.map(_.toArray(rows), normalizeNeed);
+      if (!wantAssignments || !needs.length) {
+        defer.resolve(needs);
+        return;
       }
+      // APIv3 hung api.volunteer_assignment.get/getcount off each need; API4
+      // expresses this as one grouped read over the whole page of needs.
+      CRM.api4('VolunteerAssignment', 'get', {
+        where: [['volunteer_need_id', 'IN', _.pluck(needs, 'id')]]
+      }).then(function(assignments) {
+        var byNeed = _.groupBy(_.map(_.toArray(assignments), normalizeAssignment), 'volunteer_need_id');
+        _.each(needs, function(need) {
+          var mine = byNeed[need.id] || [];
+          need.assignments = mine;
+          need.assignment_count = mine.length;
+        });
+        defer.resolve(needs);
+      }, function(error) {
+        defer.reject(error);
+      });
+    }, function(error) {
+      defer.reject(error);
     });
     return defer.promise();
   };
+
+  /**
+   * APIv3 quoted every scalar, and this layer compares the boolean flags
+   * against '1'/'0' strictly (see getFlexible/getScheduled). API4 returns real
+   * booleans, so restore the string form before the collections see the data.
+   */
+  function normalizeNeed(need) {
+    _.each(['is_active', 'is_flexible'], function(field) {
+      if (!_.isUndefined(need[field]) && need[field] !== null) {
+        need[field] = need[field] ? '1' : '0';
+      }
+    });
+    formatDate(need);
+    return need;
+  }
+
+  /**
+   * Give an assignment the keys the Assign templates interpolate.
+   *
+   * The assignment service prefixes joined contact columns with the activity
+   * role they came from (assignee_display_name and friends), while the
+   * templates address the assignee's own columns unprefixed.
+   */
+  function normalizeAssignment(assignment) {
+    return _.extend({}, assignment, {
+      contact_id: assignment.assignee_contact_id,
+      sort_name: assignment.assignee_sort_name || '',
+      display_name: assignment.assignee_display_name || '',
+      email: assignment.assignee_email || '',
+      phone: assignment.assignee_phone || ''
+    });
+  }
 
   function formatDate (arrayData) {
     if (arrayData.start_time) {

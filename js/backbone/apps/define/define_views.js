@@ -6,6 +6,9 @@
 
     Define.layout = Marionette.Layout.extend({
       template: "#crm-vol-define-layout-tpl",
+      templateHelpers: function() {
+        return {projectTitle: volunteerApp.project_title};
+      },
       regions: {
         scheduledNeeds: "#crm-vol-define-scheduled-needs-region",
         flexibleNeeds: "#crm-vol-define-flexible-needs-region"
@@ -15,8 +18,9 @@
     // allows us to toggle different views for the same model
     var itemViewSettings = {
       attributes: function() {
+        var index = this.model.collection ? this.model.collection.indexOf(this.model) : 0;
         return {
-          class: 'crm-vol-define-need ' + (this.model.collection.indexOf(this.model) % 2 ? 'even' : 'odd')
+          class: 'panel panel-default crm-vol-define-need ' + (index % 2 ? 'even' : 'odd')
         };
       },
 
@@ -31,6 +35,10 @@
         'change select[name=schedule_type]': 'changeScheduleType',
         'blur :input.timeplugin': 'updateNeed',
         'click .crm-vol-del': 'deleteNeed'
+      },
+
+      setSaveState: function(state) {
+        this.$('.crm-vol-save-state').attr('data-state', state);
       },
 
       onRender: function() {
@@ -200,22 +208,31 @@
         // update only if a change occurred
         if (thisNeed.model.get(field_name) != value) {
           thisNeed.model.set(field_name, value);
+          thisNeed.setSaveState('saving');
 
           var params = {'id': thisNeed.model.get('id')};
           params[field_name] = value;
-          CRM.api3('VolunteerNeed', 'create', params, true).done(function() {
+          var update = CRM.api4('VolunteerNeed', 'update', {
+            where: [['id', '=', params.id]],
+            values: _.omit(params, 'id')
+          });
+          CRM.status({}, CRM.toJqPromise(update));
+          update.then(function() {
+            thisNeed.setSaveState('saved');
             // As needs are updated, their IDs are added to an array
             // This is intended to be an extension point; external code
             // can listen for the 'volunteer:close:define' event then access the list of
             // needs.
             Define.registerNeedChange("updated", params.id);
+          }, function() {
+            thisNeed.setSaveState('error');
           });
         }
       },
 
       deleteNeed: function() {
         var id = this.model.get('id');
-        var count = this.model.get('api.volunteer_assignment.getcount') || 0;
+        var count = this.model.get('assignment_count') || 0;
         var role = CRM.pseudoConstant.volunteer_role[this.model.get('role_id')];
         // FIXME: the JS implementation of CiviCRM's string translator doesn't yet support plurals
         // DESIRED CODE:
@@ -231,7 +248,9 @@
         // END FIXME
         CRM.confirm(function() {
           Define.collectionView.collection.remove(id);
-          CRM.api3('volunteer_need', 'delete', {id: id}, true).done(function() {
+          var remove = CRM.api4('VolunteerNeed', 'delete', {where: [['id', '=', id]]});
+          CRM.status({}, CRM.toJqPromise(remove));
+          remove.then(function() {
             //Store the deleted need ID so the "volunteer:close:define" event
             //Can send it to any listeners
             Define.registerNeedChange("deleted", id);
@@ -264,7 +283,7 @@
 
     Define.scheduledNeedItemView = Marionette.ItemView.extend(_.extend(itemViewSettings, {
       template: '#crm-vol-define-scheduled-need-tpl',
-      tagName: 'tr'
+      tagName: 'section'
     }));
 
     Define.flexibleNeedItemView = Marionette.ItemView.extend(_.extend(itemViewSettings, {
@@ -276,40 +295,41 @@
       id: "manage_needs",
       template: "#crm-vol-define-table-tpl",
       itemView: Define.scheduledNeedItemView,
-      itemViewContainer: '#crm-vol-define-needs-table > tbody',
+      itemViewContainer: '.crm-vol-define-needs-list',
 
       events: {
         'change #crm-vol-define-add-need': 'addNewNeed'
       },
 
       addNewNeed: function() {
+        var view = this;
         var params = {
           role_id: $('#crm-vol-define-add-need').val()
         };
         // Reset add another select
         $('#crm-vol-define-add-need').select2('val', '');
-        $('#crm-vol-define-needs-table').block();
+        this.$('.crm-vol-define-needs-list').block();
         this.collection.createNewNeed(params).done(function(data) {
           //Register the new ID
           Define.registerNeedChange("created", data.id);
-          $('#crm-vol-define-needs-table').unblock();
+        }).always(function() {
+          view.$('.crm-vol-define-needs-list').unblock();
         });
       },
 
       appendHtml: function(thisView, itemView) {
         var container = thisView.$(thisView.itemViewContainer);
-        var addRow = thisView.$('#crm-vol-define-add-row');
-        if (addRow.length) {
-          addRow.before(itemView.el);
-        }
-        else {
-          container.append(itemView.el);
-        }
+        container.append(itemView.el);
+        thisView.$('.crm-vol-define-empty').removeClass('is-visible');
       },
 
       onRender: function() {
-        this.$('#crm-vol-define-needs-table > tbody').append($('#crm-vol-define-add-row-tpl').html());
         this.$('#crm-vol-define-add-need').crmSelect2();
+        this.$('.crm-vol-define-empty').toggleClass('is-visible', this.collection.length === 0);
+      },
+
+      onItemRemoved: function() {
+        this.$('.crm-vol-define-empty').toggleClass('is-visible', this.collection.length === 0);
       }
     });
   });

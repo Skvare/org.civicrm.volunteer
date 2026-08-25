@@ -16,62 +16,73 @@ CRM.volunteerApp.module('Entities', function(Entities, volunteerApp, Backbone, M
     comparator: 'sort_name'
   });
 
+  /**
+   * The columns the search results template renders.
+   *
+   * APIv3's Contact.get flattened the primary address, email and phone onto
+   * the record; API4 reaches them through implicit joins, so the rows are
+   * remapped to the same keys in formatContact().
+   */
+  var contactSelect = [
+    'id',
+    'sort_name',
+    'address_primary.city',
+    'address_primary.state_province_id:label',
+    'email_primary.email',
+    'phone_primary.phone'
+  ];
+
+  /**
+   * Give every row the keys the underscore templates interpolate. An absent
+   * key would throw rather than render blank.
+   */
+  function formatContact(row) {
+    return {
+      contact_id: row.id,
+      id: row.id,
+      sort_name: row.sort_name || '',
+      city: row['address_primary.city'] || '',
+      state_province: row['address_primary.state_province_id:label'] || '',
+      email: row['email_primary.email'] || '',
+      phone: row['phone_primary.phone'] || ''
+    };
+  }
+
   Entities.getContacts = function() {
     var Search = CRM.volunteerApp.module('Search');
-    var defaults = {
-      'sequential': 1,
-      'return': [
-        'contact_id',
-        'sort_name',
-        'email',
-        'phone',
-        'city',
-        'state_province'
-      ],
-      'options': {
-        'limit': Search.resultsPerPage,
-        'offset': 0
-      }
-    };
-    Search.params = _.extend(defaults, Search.params);
+    Search.params = Search.params || {};
+    Search.params.filters = Search.params.filters || [];
+    Search.params.options = _.extend({
+      limit: Search.resultsPerPage,
+      offset: 0
+    }, Search.params.options || {});
 
     var defer = CRM.$.Deferred();
-    CRM.api3('Contact', 'get', Search.params, {
-      success: function(data) {
-        Entities.getContactCount().done(function(cnt) {
-          var end = Search.params.options.offset + Search.params.options.limit;
-          var start = Search.params.options.offset + 1;
+    // Selecting row_count alongside the page's fields makes API4 report the
+    // unpaged total as countMatched, so the pager needs no second request.
+    CRM.api4('Contact', 'get', {
+      select: ['row_count'].concat(contactSelect),
+      where: Search.params.filters,
+      limit: Search.params.options.limit,
+      offset: Search.params.options.offset
+    }).then(function(rows) {
+      var total = _.isUndefined(rows.countMatched) ? rows.length : rows.countMatched;
+      var end = Search.params.options.offset + Search.params.options.limit;
+      var start = Search.params.options.offset + 1;
 
-          if (end > cnt) {
-            end = cnt;
-          }
-
-          Search.pagerData.set({
-            'end': end,
-            'start': start,
-            'total': cnt
-          });
-
-          defer.resolve(_.toArray(data.values));
-        });
+      if (end > total) {
+        end = total;
       }
-    });
-    return defer.promise();
-  };
 
-  Entities.getContactCount = function() {
-    var defaults = {
-      'options': {
-        'limit': 0
-      }
-    };
-    params = _.extend(defaults, CRM.volunteerApp.module('Search').params);
+      Search.pagerData.set({
+        'end': end,
+        'start': start,
+        'total': total
+      });
 
-    var defer = $.Deferred();
-    CRM.api3('Contact', 'getcount', params, {
-      success: function(data) {
-        defer.resolve(data.result);
-      }
+      defer.resolve(_.map(_.toArray(rows), formatContact));
+    }, function(error) {
+      defer.reject(error);
     });
     return defer.promise();
   };

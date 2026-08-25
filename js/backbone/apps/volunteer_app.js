@@ -6,8 +6,8 @@ CRM.volunteerApp.addRegions({
 });
 
 CRM.$(function($) {
-  // Wait for all scripts to load before starting app
-  CRM.volunteerApp.start();
+  // Bind translations to this extension's domain.
+  var ts = CRM.ts('org.civicrm.volunteer');
 
   CRM.volunteerDialogSettings = function(title) {
     var settings = {
@@ -15,7 +15,12 @@ CRM.$(function($) {
       title: title,
       width: '85%',
       height: parseInt($(window).height() * .80),
-      buttons: [{text: ts('Done'), click: function() {$(this).dialog('close');}, icons: {primary: 'ui-icon-close'}}],
+      dialogClass: 'crm-volunteer-workflow-dialog',
+      buttons: [{
+        class: 'crm-vol-dialog-done',
+        text: ts('Done'),
+        click: function() {$(this).dialog('close');}
+      }],
       close: function () {
         if(CRM.volunteerApp.tab == "Define") {
           $("body").trigger("volunteer:close:define", [CRM.volunteerApp.project_id, CRM.volunteerApp.Define.needRegistry]);
@@ -26,9 +31,10 @@ CRM.$(function($) {
     return settings;
   };
 
-  CRM.volunteerPopup = function(title, tab, vid) {
+  CRM.volunteerPopup = function(title, tab, vid, projectTitle) {
     CRM.volunteerApp.tab = tab;
     CRM.volunteerApp.project_id = vid;
+    CRM.volunteerApp.project_title = projectTitle || '';
     $('#crm-volunteer-dialog').dialog(CRM.volunteerDialogSettings(title));
     CRM.volunteerApp.module(CRM.volunteerApp.tab).start();
   };

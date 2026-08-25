@@ -15,13 +15,17 @@ CRM.volunteerApp.module('Entities', function(Entities, volunteerApp, Backbone, M
     createNewAssignment: function(params) {
       var thisCollection = this;
       var defer = CRM.$.Deferred();
-      CRM.api3('volunteer_assignment', 'create', params, true)
-        .done(function(result) {
-          defer.resolve();
-          var id = result.id;
-          var assignment = new Entities.Assignment(result.values[id]);
-          thisCollection.add(assignment);
-      });
+      // crmApi's fourth argument used to supply the saving/saved feedback.
+      CRM.status({}, defer.promise());
+      // API4 resolves to the created rows themselves rather than to APIv3's
+      // envelope keyed by the new ID.
+      CRM.api4('VolunteerAssignment', 'create', {values: params})
+        .then(function(created) {
+          thisCollection.add(new Entities.Assignment(created[0]));
+          defer.resolve(created[0]);
+        }, function(error) {
+          defer.reject(error);
+        });
       return defer.promise();
     }
   });

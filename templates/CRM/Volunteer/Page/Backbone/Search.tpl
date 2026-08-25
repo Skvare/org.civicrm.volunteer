@@ -27,6 +27,13 @@
 {* Contains js templates for backbone-based volunteer search sub-application *}
 
 <script type="text/template" id="crm-vol-search-layout-tpl">
+  <div class="crm-vol-dialog-intro crm-vol-search-intro">
+    <i aria-hidden="true" class="crm-i fa-users"></i>
+    <div>
+      <strong><span class="crm-vol-search-selected-count">0</span> {ts domain='org.civicrm.volunteer'}selected{/ts}</strong>
+      <span class="crm-vol-search-capacity"></span>
+    </div>
+  </div>
   <form class="crm-block crm-form-block crm-event-manage-volunteer-search-form-block">
     <div class="crm-accordion-wrapper">
       <div class="crm-accordion-header">{ts domain='org.civicrm.volunteer'}Edit Search Criteria{/ts}</div>
@@ -66,7 +73,7 @@
 <script type="text/template" id="crm-vol-search-field-checkRadio-tpl">
   <% var elementType = selectMultiple ? 'checkbox' : 'radio'; %>
   <div class="label">
-    <label><%= label %>:</label>
+    <label><%- label %>:</label>
   </div>
   <div class="content">
     {literal}
@@ -74,7 +81,7 @@
         <% var elementClass = 'crm-form-' + elementType; %>
         <% var elementID = elementName + '_' + item.value; %>
         <input class="<%= elementClass %>" id="<%= elementID %>" name="<%= elementName %>" type="<%= elementType %>" value="<%= item.value %>"/>
-        <label for="<%= elementID %>"><%= item.label %></label>
+        <label for="<%- elementID %>"><%- item.label %></label>
       <% }); %>
     {/literal}
   </div>
@@ -83,13 +90,13 @@
 <script type="text/template" id="crm-vol-search-field-select-tpl">
   <% var multipleAttr = (selectMultiple ? 'multiple' : ''); %>
   <div class="label">
-    <label for="<%= elementName %>"><%= label %>:</label>
+    <label for="<%- elementName %>"><%- label %>:</label>
   </div>
   <div class="content">
     <select class="big crm-form-select" id="<%= elementName %>" <%= multipleAttr %> name="<%= elementName %>">
     {literal}
       <% options.forEach(function(item) { %>
-        <option value="<%= item.value %>"><%= item.label %></option>
+        <option value="<%- item.value %>"><%- item.label %></option>
       <% }); %>
     {/literal}
     </select>
@@ -98,7 +105,7 @@
 
 <script type="text/template" id="crm-vol-search-field-text-tpl">
   <div class="label">
-    <label for="<%= elementName %>"><%= label %>:</label>
+    <label for="<%- elementName %>"><%- label %>:</label>
   </div>
   <div class="content">
     <input type="text" class="big crm-form-text" id="<%= elementName %>" name="<%= elementName %>"/>
@@ -106,23 +113,23 @@
 </script>
 
 <script type="text/template" id="crm-vol-search-contact-tpl">
-  <td><input class="select-row crm-form-checkbox" type="checkbox" name="selected_contacts" value="<%= contact_id %>" /></td>
-  <td><%= sort_name %></td>
-  <td><%= city %></td>
-  <td><%= state_province %></td>
-  <td><%= email %></td>
-  <td><%= phone %></td>
+  <td data-label="{ts escape='htmlattribute' domain='org.civicrm.volunteer'}Select{/ts}"><input class="select-row crm-form-checkbox" type="checkbox" name="selected_contacts" value="<%= contact_id %>" aria-label="{ts escape='htmlattribute' domain='org.civicrm.volunteer'}Select this volunteer{/ts}" /></td>
+  <td data-label="{ts escape='htmlattribute' domain='org.civicrm.volunteer'}Name{/ts}"><a target="_blank" rel="noopener" href="<%- contactUrl(contact_id) %>"><%- sort_name %></a></td>
+  <td data-label="{ts escape='htmlattribute' domain='org.civicrm.volunteer'}City{/ts}"><%- city %></td>
+  <td data-label="{ts escape='htmlattribute' domain='org.civicrm.volunteer'}State{/ts}"><%- state_province %></td>
+  <td data-label="{ts escape='htmlattribute' domain='org.civicrm.volunteer'}Email{/ts}"><%- email %></td>
+  <td data-label="{ts escape='htmlattribute' domain='org.civicrm.volunteer'}Phone{/ts}"><%- phone %></td>
 </script>
 
 <script type="text/template" id="crm-vol-search-pager-tpl">
   <div class="crm-submit-buttons">
     <% if (start > 1) {literal}{{/literal} %>
-      <button class="crm-button crm-button-type-back">{ts domain='org.civicrm.volunteer'}Previous{/ts}</button>
+      <button type="button" class="crm-button crm-button-type-back"><i aria-hidden="true" class="crm-i fa-chevron-left"></i> {ts domain='org.civicrm.volunteer'}Previous{/ts}</button>
     <% {literal}}{/literal} %>
     <% if (total > end) {literal}{{/literal} %>
-      <button class="crm-button crm-button-type-next">{ts domain='org.civicrm.volunteer'}Next{/ts}</button>
+      <button type="button" class="crm-button crm-button-type-next">{ts domain='org.civicrm.volunteer'}Next{/ts} <i aria-hidden="true" class="crm-i fa-chevron-right"></i></button>
     <% {literal}}{/literal} %>
-    <span>Showing contacts <%= start %> - <%= end %> of <%= total %></span>
+    <span>{ts 1='<%= start %>' 2='<%= end %>' 3='<%= total %>' domain='org.civicrm.volunteer'}Showing contacts %1 - %2 of %3{/ts}</span>
   </div>
 </script>
 {/strip}

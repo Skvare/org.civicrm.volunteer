@@ -3,8 +3,9 @@
   CRM.volunteerApp.module('Search', function(Search, volunteerApp, Backbone, Marionette, $, _) {
     var layout;
     Search.startWithParent = false;
-    Search.params = {};
     Search.resultsPerPage = 25;
+    // API4 where clauses, plus the paging state the pager advances in place.
+    Search.params = {filters: [], options: {limit: Search.resultsPerPage, offset: 0}};
 
     // Kick everything off
     Search.addInitializer(function() {
@@ -16,6 +17,10 @@
     Search.on('start', function(params) {
       Search.need_id = params.need_id;
       Search.cnt_open_assignments = params.cnt_open_assignments;
+      layout.$('.crm-vol-search-capacity').text(
+        ts('Select up to %1 volunteers for this shift.', {1: Search.cnt_open_assignments})
+      );
+      layout.$('.crm-vol-search-selected-count').text('0');
 
       // build search form
       volunteerApp.Entities.getVolCustomFields().done(function(data) {
@@ -63,15 +68,21 @@
 
       var params = {
         volunteer_need_id: need.get('id'),
-        status_id: status['Available'],
-        activity_date_time: need.get('start_time')
+        status_id: status['Scheduled'],
+        activity_date_time: need.get('start_time'),
+        volunteer_role_id: need.get('role_id'),
+        time_scheduled_minutes: need.get('duration')
       };
 
       var i = 0;
       var doSave = function() {
         if (contactIDs.length > i) {
           params.contact_id = contactIDs[i++];
-          needView.collection.createNewAssignment(params).done(doSave);
+          needView.collection.createNewAssignment(params)
+            .done(doSave)
+            .fail(function() {
+              needView.$el.unblock();
+            });
         } else {
           needView.$el.unblock();
         }
@@ -85,24 +96,19 @@
       title: ts('Find Volunteers'),
       width: '75%',
       height: parseInt($(window).height() * .70),
+      dialogClass: 'crm-volunteer-search-workflow-dialog',
       buttons: [
         {
           class: 'crm-vol-search-assign',
           disabled: true,
-          text: ts('Assign'),
+          text: ts('Assign selected'),
 
-          click: Search.saveAssignments,
-          icons: {
-            primary: 'ui-icon-check'
-          }
+          click: Search.saveAssignments
         },
         {
           text: ts('Cancel'),
           click: function() {
             $(this).dialog('close');
-          },
-          icons: {
-            primary: 'ui-icon-close'
           }
         }
       ],

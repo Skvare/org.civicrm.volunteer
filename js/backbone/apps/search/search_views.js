@@ -91,25 +91,50 @@
         dialog.block();
         e.preventDefault();
 
-        Search.params = {};
+        // API4 takes explicit where clauses rather than APIv3's flat filter
+        // map, so the form builds them directly. `options` stays separate
+        // because the pager advances its offset in place.
+        Search.params = {
+          filters: [],
+          options: {limit: Search.resultsPerPage, offset: 0}
+        };
         Search.formFields.each(function(item) {
 
           var field = CRM.$('[name=' + item.get('elementName') + ']');
           var val = Search.getFieldValue(field);
-          if (val) {
-            // For custom fields, give the param to contact search the name custom_n.
-            // For the group field, name the param filter.group_id.
-            var key = item.get('id') ? 'custom_' + item.get('id') : 'filter.group_id';
-            if (val.length > 1) {
-              Search.params[key] = {IN: val};
-            } else {
-              Search.params[key] = val[0];
-            }
+          if (!val) {
+            return;
           }
+
+          // Group membership is a bridge join, and API4 defines only IN and
+          // NOT IN for it -- APIv3 spelled this filter.group_id.
+          if (!item.get('id')) {
+            Search.params.filters.push(['groups', 'IN', val]);
+            return;
+          }
+
+          // API4 addresses a custom field as CustomGroupName.field_name;
+          // there is no custom_n alias.
+          var key = item.get('custom_group_id.name') + '.' + item.get('name');
+
+          if (item.get('serialize')) {
+            // A multi-value custom field stores a separated list, so each
+            // requested value must be matched inside it. APIv3's IN filter on
+            // such a field meant "has any of these", which is an OR group.
+            Search.params.filters.push(['OR', _.map(val, function(one) {
+              return [key, 'CONTAINS', one];
+            })]);
+            return;
+          }
+
+          Search.params.filters.push(val.length > 1
+            ? [key, 'IN', val]
+            : [key, '=', val[0]]);
         });
 
         volunteerApp.Entities.getContacts().done(function(result) {
           Search.resultsView.collection.reset(result);
+          Search.updateSelectionSummary();
           CRM.$('#crm-vol-search-form-region').closest('.crm-accordion-wrapper').addClass('collapsed');
           dialog.unblock();
         });
@@ -123,18 +148,12 @@
 
         var btn = CRM.$('<button></button>', {
           'type': 'submit',
-          'class': 'crm-button crm-form-submit'
-        }).button({
-          icons: {primary: 'ui-icon-search'},
-          label: ts('Search')
+          'class': 'crm-button crm-form-submit',
+          'html': '<i aria-hidden="true" class="crm-i fa-search"></i> ' + _.escape(ts('Search'))
         });
         var btn_wrapper = CRM.$('<div></div>', {class: 'crm-submit-buttons'})
                 .append(btn);
         this.$el.append(btn_wrapper);
-
-        // styling hack to ensure white icons
-        this.$('.crm-button').addClass('button');
-        this.$('.crm-button .ui-icon').addClass('icon');
 
         // this is a bit of a hack; submit handlers can't be bound via the events
         // attribute because the events are delegated jQuery events and they fire too late
@@ -165,17 +184,6 @@
           this.$el.show();
         }
 
-        this.$('.crm-button-type-back').button({
-          icons: {primary: 'ui-icon-triangle-1-w'}
-        });
-        this.$('.crm-button-type-next').button({
-          icons: {secondary: 'ui-icon-triangle-1-e'}
-        });
-
-        // styling hack to ensure white icons
-        this.$('.crm-button').addClass('button');
-        this.$('.crm-button .ui-icon').addClass('icon');
-
         this.$('.crm-button').click(function(e) {
           e.preventDefault();
           var dialog = CRM.$("#crm-volunteer-search-dialog");
@@ -186,15 +194,33 @@
 
           volunteerApp.Entities.getContacts().done(function(result) {
             Search.resultsView.collection.reset(result);
+            Search.updateSelectionSummary();
             dialog.unblock();
           });
         });
       }
     });
 
+    Search.updateSelectionSummary = function() {
+      var contactCheckboxes = $('#crm-vol-search-results-region [name=selected_contacts]');
+      var selectedCount = contactCheckboxes.filter(':checked').length;
+      contactCheckboxes.not(':checked').prop('disabled', selectedCount >= Search.cnt_open_assignments);
+      $('.crm-vol-search-selected-count').text(selectedCount);
+
+      var buttonPane = $('#crm-volunteer-search-dialog').siblings('.ui-dialog-buttonpane');
+      var button = buttonPane.find('button.crm-vol-search-assign');
+      button.button(selectedCount > 0 ? 'enable' : 'disable');
+    };
+
     Search.contactView = Marionette.ItemView.extend({
       tagName: 'tr',
       template: '#crm-vol-search-contact-tpl',
+
+      templateHelpers: {
+        contactUrl: function(contactId) {
+          return CRM.url('civicrm/contact/view', {reset: 1, cid: contactId});
+        }
+      },
 
       attributes: function() {
         return {
@@ -208,21 +234,7 @@
           var toggle = CRM.$(this).is(':checked');
           $(this).closest('tr').toggleClass('crm-row-selected', toggle);
 
-          var contact_checkboxes = $('#crm-vol-search-results-region [name=selected_contacts]');
-          var cnt_selected = contact_checkboxes.filter(':checked').length;
-          if (cnt_selected >= Search.cnt_open_assignments) {
-            contact_checkboxes.not(':checked').prop('disabled', true);
-          } else {
-            contact_checkboxes.prop('disabled', false);
-          }
-
-          var buttonPane = CRM.$('#crm-volunteer-search-dialog').siblings('.ui-dialog-buttonpane');
-          var btn = buttonPane.find('button.crm-vol-search-assign');
-          if (cnt_selected > 0) {
-            btn.button('enable');
-          } else {
-            btn.button('disable');
-          }
+          Search.updateSelectionSummary();
         });
       }
     });
@@ -246,6 +258,7 @@
           }
 
           contacts.first().trigger('change');
+          Search.updateSelectionSummary();
         });
       }
     });
