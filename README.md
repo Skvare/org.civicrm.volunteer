@@ -44,14 +44,6 @@ Three changes can affect an existing site. Full detail is in
    CiviVolunteer entities. It bypassed all project authorization. Use `create`
    with an `id`, which is guarded and is what core recommends.
 
-## Resources
-
-* [Documentation](https://docs.civicrm.org/volunteer/en/latest/) (in a dedicated guide)
-* [Release downloads](https://civicrm.org/extensions/civivolunteer) (within CiviCRM.org's extensions directory)
-* [Issue tracking (current)](https://github.com/civicrm/org.civicrm.volunteer/issues)
-* [Issue tracking (archived)](https://issues.civicrm.org/jira/browse/VOL) (in a Jira project)
-* [Q&A on StackExchange](http://civicrm.stackexchange.com/questions/tagged/civivolunteer) (with the `civivolunteer` tag)
-
 ## Development tests
 
 The development suite and static-analysis configuration are included in the
