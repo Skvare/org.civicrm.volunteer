@@ -19,7 +19,7 @@ In addition to simple settings such as "Title" and "Description", each project h
 * **Campaign:** Projects can be associated with [campaigns](https://docs.civicrm.org/user/en/stable/campaign/what-is-civicampaign/). The campaign is copied onto every volunteer assignment activity created for the project, so volunteer hours can be reported per campaign.
 
     !!! tip
-        You can restrict the campaigns available for association with volunteering projects (by campaign type) by choosing **Volunteers > Configure Volunteer Settings** and looking in the **Global Settings** section.
+        You can restrict the campaigns available for association with volunteering projects (by campaign type) by choosing **Volunteers > Configure Volunteer Settings** and looking in the **Global Settings** section. The same section holds **Use the backend theme on public volunteer pages**, on by default, which renders the public opportunity browser and signup form with CiviCRM's backend theme so they match the management screens; turn it off to let your frontend theme apply to them.
 
 * **Multiple [relationships](#relationships) to contacts:** In order to control editing access and email notifications for each project, we must add relationships from the project to specific CiviCRM contacts.
 

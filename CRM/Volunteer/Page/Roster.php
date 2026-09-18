@@ -58,6 +58,8 @@ class CRM_Volunteer_Page_Roster extends CRM_Core_Page {
     $resources
       ->addScriptFile('org.civicrm.volunteer', 'js/roster.js', 0, 'html-header')
       ->addScriptFile('org.civicrm.volunteer', 'js/roster.js', 0, 'ajax-snippet')
+      ->addStyleFile('org.civicrm.volunteer', 'css/volunteer-tokens.css', 0, 'html-header')
+      ->addStyleFile('org.civicrm.volunteer', 'css/volunteer-tokens.css', 0, 'ajax-snippet')
       ->addStyleFile('org.civicrm.volunteer', 'css/roster.css', 0, 'html-header')
       ->addStyleFile('org.civicrm.volunteer', 'css/roster.css', 0, 'ajax-snippet');
 

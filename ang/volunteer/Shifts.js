@@ -200,7 +200,12 @@
     }
 
     function prepareNeed(need) {
-      need.role_id = parseInt(need.role_id, 10);
+      // A draft row has no role yet. parseInt(null) is NaN, which the role
+      // <select> cannot match, so it would show Angular's "?" placeholder
+      // instead of "Select a role".
+      need.role_id = need.role_id === null || need.role_id === undefined || need.role_id === ''
+        ? null
+        : parseInt(need.role_id, 10);
       need.is_active = need.is_active == 1;
       need.is_flexible = need.is_flexible == 1;
       need.public = parseInt(need.visibility_id, 10) === parseInt($scope.visibility.public, 10);
@@ -347,9 +352,9 @@
       return values;
     }
 
-    // Mirrors the legacy Backbone registry that volunteer:close:define
-    // consumers expect: a need created in this session stays reported as
-    // created even if it is edited again before the dialog closes.
+    // The registry shape the volunteer:close:define event has always
+    // carried for third-party listeners: a need created in this session stays
+    // reported as created even if it is edited again before the dialog closes.
     function markRegistry(action, id) {
       if (!model.needRegistry || !id) {
         return;

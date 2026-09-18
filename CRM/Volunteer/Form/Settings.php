@@ -145,6 +145,14 @@ class CRM_Volunteer_Form_Settings extends CRM_Core_Form {
 
 
     $this->add(
+      'checkbox',
+      'volunteer_use_backend_theme',
+      ts('Use the backend theme on public volunteer pages', array('domain' => 'org.civicrm.volunteer')),
+      null,
+      false
+    );
+
+    $this->add(
         'wysiwyg',
         'volunteer_general_project_settings_help_text',
         ts('Help text for the project settings screen', array('domain' => 'org.civicrm.volunteer')),
@@ -227,6 +235,11 @@ class CRM_Volunteer_Form_Settings extends CRM_Core_Form {
     foreach ($this->_elements as $element) {
       $name = $element->getName();
       $helpText = $this->getSettingMetadata($name, "help_text");
+      // Core's settings metadata casts a string help_text to an array of
+      // paragraphs; the template prints one string.
+      if (is_array($helpText)) {
+        $helpText = implode(' ', array_filter(array_map('strval', $helpText)));
+      }
       if ($helpText && !array_key_exists($name, $this->_fieldDescriptions)) {
         $this->_fieldDescriptions[$name] = $helpText;
       }
@@ -262,6 +275,7 @@ class CRM_Volunteer_Form_Settings extends CRM_Core_Form {
     // General Settings
     $defaults['volunteer_general_campaign_filter_type'] = $this->_settings['volunteer_general_campaign_filter_type'] ?? NULL;
     $defaults['volunteer_general_campaign_filter_list'] = $this->_settings['volunteer_general_campaign_filter_list'] ?? NULL;
+    $defaults['volunteer_use_backend_theme'] = $this->_settings['volunteer_use_backend_theme'] ?? 1;
     $defaults['volunteer_general_project_settings_help_text'] = $this->_settings['volunteer_general_project_settings_help_text'] ?? NULL;
 
     return $defaults;
@@ -320,6 +334,9 @@ class CRM_Volunteer_Form_Settings extends CRM_Core_Form {
       //Whitelist/Blacklist settings
       'volunteer_general_campaign_filter_type' => $values['volunteer_general_campaign_filter_type'] ?? NULL,
       'volunteer_general_campaign_filter_list' => $values['volunteer_general_campaign_filter_list'] ?? array(),
+      // A checkbox is absent from the submission when unchecked; store the
+      // explicit 0 so the settings bag reflects the form.
+      'volunteer_use_backend_theme' => empty($values['volunteer_use_backend_theme']) ? 0 : 1,
     ));
 
     // The wysiwyg value is written through the settings bag rather than the

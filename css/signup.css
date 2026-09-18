@@ -107,8 +107,8 @@
 }
 
 .crm-vol-signup-page .panel {
-  background: var(--crm-vol-public-panel, var(--crm-paper, #fff));
-  border: 1px solid var(--crm-vol-public-border, #d5dee8);
+  background: var(--crm-vol-paper, var(--crm-paper, #fff));
+  border: 1px solid var(--crm-vol-border, #d5dee8);
   border-radius: var(--crm-l-radius, 6px);
   box-shadow: none;
 }
@@ -145,7 +145,7 @@
 
 .crm-vol-signup-page .crm-vol-profile-help,
 .crm-vol-signup-page .crm-vol-signup-confirmation-help {
-  color: var(--crm-vol-public-muted, var(--crm-inactive-color, #718195));
+  color: var(--crm-vol-muted, var(--crm-inactive-color, #718195));
   font-size: 0.8rem;
   line-height: 1.4;
 }
@@ -210,8 +210,8 @@
 }
 
 .crm-vol-signup-page .crm-volunteer-signup-profiles :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea, .select2-container) {
-  background: var(--crm-vol-public-panel, var(--crm-paper, #fff));
-  border: 1px solid var(--crm-vol-public-border, #d5dee8);
+  background: var(--crm-vol-paper, var(--crm-paper, #fff));
+  border: 1px solid var(--crm-vol-border, #d5dee8);
   border-radius: var(--crm-l-radius, 5px);
   box-sizing: border-box;
   max-width: 100%;
@@ -249,7 +249,7 @@
   background: transparent;
   border: 0;
   border-radius: var(--crm-l-radius, 4px);
-  color: var(--crm-vol-public-muted, var(--crm-inactive-color, #718195));
+  color: var(--crm-vol-muted, var(--crm-inactive-color, #718195));
   cursor: pointer;
   display: inline-flex;
   font-size: 0.9em;
@@ -331,7 +331,7 @@
 }
 
 .crm-vol-signup-page .crm-vol-bringing-copy small {
-  color: var(--crm-vol-public-muted, var(--crm-inactive-color, #718195));
+  color: var(--crm-vol-muted, var(--crm-inactive-color, #718195));
   font-size: 0.8rem;
   font-weight: 400;
   line-height: 1.35;
@@ -379,7 +379,7 @@
 }
 
 .crm-vol-signup-page .crm-vol-commitment-project + .crm-vol-commitment-project {
-  border-top: 1px solid var(--crm-vol-public-border, #d5dee8);
+  border-top: 1px solid var(--crm-vol-border, #d5dee8);
 }
 
 .crm-vol-signup-page .crm-vol-commitment-list {
@@ -389,7 +389,7 @@
 }
 
 .crm-vol-signup-page .crm-vol-commitment + .crm-vol-commitment {
-  border-top: 1px solid var(--crm-vol-public-border, #d5dee8);
+  border-top: 1px solid var(--crm-vol-border, #d5dee8);
   margin-top: 1rem;
   padding-top: 1rem;
 }
@@ -401,7 +401,7 @@
 }
 
 .crm-vol-signup-page .crm-vol-commitment-list time {
-  color: var(--crm-vol-public-muted, var(--crm-inactive-color, #718195));
+  color: var(--crm-vol-muted, var(--crm-inactive-color, #718195));
   display: block;
   font-size: 0.8rem;
   line-height: 1.4;
@@ -409,7 +409,7 @@
 }
 
 .crm-vol-signup-page .crm-vol-flexible-summary {
-  color: var(--crm-vol-public-muted, var(--crm-inactive-color, #718195));
+  color: var(--crm-vol-muted, var(--crm-inactive-color, #718195));
   font-size: 0.8rem;
   line-height: 1.45;
   margin: 0.25rem 0 0;
@@ -423,8 +423,8 @@
 
 .crm-vol-signup-page .crm-vol-commitment-meta {
   background: var(--crm-layer1-bg-color, #f7f9fb);
-  border-top: 1px solid var(--crm-vol-public-border, #d5dee8);
-  color: var(--crm-vol-public-muted, var(--crm-inactive-color, #718195));
+  border-top: 1px solid var(--crm-vol-border, #d5dee8);
+  color: var(--crm-vol-muted, var(--crm-inactive-color, #718195));
   font-size: 0.75rem;
   line-height: 1.35;
   padding: 0.9rem 1.15rem;

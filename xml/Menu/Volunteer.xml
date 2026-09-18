@@ -65,12 +65,6 @@
     <is_public>true</is_public>
   </item>
   <item>
-    <path>civicrm/volunteer/backbonetemplates</path>
-    <title>Load Backbone Templates</title>
-    <page_callback>CRM_Volunteer_Page_Backbone</page_callback>
-    <access_callback>CRM_Volunteer_Permission::checkProjectManagement</access_callback>
-  </item>
-  <item>
     <path>civicrm/vol</path>
     <page_callback>CRM_Volunteer_Page_Angular</page_callback>
     <title>Volunteer Opportunities</title>

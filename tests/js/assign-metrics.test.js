@@ -4,114 +4,22 @@
 // capacity math (openSpots/spotsLabel/capacityLabel), the finite-quantity rule
 // behind isCounted, initials(), the need values written for scheduled vs
 // available shifts, and the optimistic remove/move with revert on failure.
-// The controller is captured with a fake angular module and driven with a mock
-// $scope; the APIv4 stub is always named crmApi4.
 //
 // isCounted() is kept in step, by comment, with volWorkflow.summarize() and the
 // server-side VolunteerAssignment.getCapacity action: only needs with a finite
 // positive quantity contribute to capacity on every layer.
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const {
+  makeAngular, makeUnderscore, makeCRM, makeQ, makeApi, settle, deepEqual, loadInNewContext,
+} = require('./harness');
 
-const extensionRoot = path.resolve(__dirname, '..', '..');
-const source = fs.readFileSync(path.join(extensionRoot, 'ang/volunteer/Assign.js'), 'utf8');
-
-const controllers = {};
-const moduleApi = {
-  controller(name, controller) { controllers[name] = controller; return moduleApi; },
-  directive() { return moduleApi; },
-  config() { return moduleApi; },
-};
-const angular = {
-  module() { return moduleApi; },
-  copy(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); },
-  forEach(object, fn) {
-    if (object === null || object === undefined) { return; }
-    if (Array.isArray(object)) { object.forEach(fn); }
-    else { Object.keys(object).forEach((key) => fn(object[key], key)); }
-  },
-  extend: Object.assign,
-  noop() {},
-};
-
-function makeUnderscore() {
-  const wrap = (value) => ({
-    value,
-    map(fn) { return wrap(value.map(fn)); },
-    filter(fn) { return wrap(value.filter(fn)); },
-    first(count) { return wrap(value.slice(0, count)); },
-    value() { return value; },
-  });
-  return {
-    chain: wrap,
-    isArray: Array.isArray,
-    keys: Object.keys,
-    values: (object) => Object.values(object || {}),
-    size: (object) => Object.keys(object || {}).length,
-    map: (list, fn) => (list || []).map(fn),
-    filter: (list, fn) => (list || []).filter(fn),
-    find: (list, fn) => (Array.isArray(list) ? list.find(fn) : Object.values(list || {}).find(fn)),
-    some: (list, fn) => (list || []).some(fn),
-    without: (list, ...removed) => (list || []).filter((item) => removed.indexOf(item) < 0),
-  };
-}
-
+const {angular, registry} = makeAngular();
 const underscore = makeUnderscore();
-const alerts = [];
-const confirmations = [];
-const CRM = {
-  $: () => ({trigger() {}}),
-  _: underscore,
-  ts: () => (text, params) => String(text).replace(
-    /%1/g, params && params[1] !== undefined ? String(params[1]) : '%1'
-  ).replace(/%2/g, params && params[2] !== undefined ? String(params[2]) : '%2'),
-  alert: (message, title, type) => alerts.push({message, title, type}),
-  confirm: (options) => ({
-    on(event, callback) {
-      if (event === 'crmConfirm:yes') { confirmations.push({options, callback}); }
-      return this;
-    },
-  }),
-  vars: {},
-};
-
-vm.runInNewContext(source, {angular, Date, CRM, jQuery: {}, _: underscore});
+const {CRM, alerts, confirmations} = makeCRM({_: underscore});
+loadInNewContext('ang/volunteer/Assign.js', {angular, CRM, _: underscore});
+const controllers = registry.controllers;
 assert.strictEqual(typeof controllers.VolunteerAssign, 'function');
-
-function makeQ() {
-  const all = (work) => {
-    if (Array.isArray(work)) { return Promise.all(work); }
-    const keys = Object.keys(work);
-    return Promise.all(keys.map((key) => work[key])).then((values) => {
-      const result = {};
-      keys.forEach((key, index) => { result[key] = values[index]; });
-      return result;
-    });
-  };
-  return {resolve: (value) => Promise.resolve(value), reject: (error) => Promise.reject(error), all};
-}
-
-function makeApi() {
-  const calls = [];
-  const responses = [];
-  const crmApi4 = (entity, action, params) => {
-    calls.push({entity, action, params});
-    const response = responses.length ? responses.shift() : {rows: [{}]};
-    return response.error ? Promise.reject(response.error) : Promise.resolve(response.rows);
-  };
-  return {crmApi4, calls, responses};
-}
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-// Values produced inside the vm context carry the vm realm's prototypes, so
-// deep comparisons go through a host-realm round trip first.
-const deepEqual = (actual, expected, message) => assert.deepStrictEqual(
-  JSON.parse(JSON.stringify(actual)), expected, message
-);
 
 const need = (id, overrides = {}) => Object.assign({
   id: id, role_id: 3, quantity: '3', is_flexible: 0, is_active: 1, visibility_id: 1,

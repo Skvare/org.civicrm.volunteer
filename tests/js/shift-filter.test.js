@@ -1,25 +1,17 @@
 'use strict';
 
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+// Behavioural checks for the volShiftFilters factory in ang/volunteer/Shifts.js:
+// site-local timestamp parsing, range construction from the server presets and
+// the interval/attribute matching behind the Shifts & roles filters.
 
-const extensionRoot = path.resolve(__dirname, '..', '..');
-const source = fs.readFileSync(path.join(extensionRoot, 'ang/volunteer/Shifts.js'), 'utf8');
-let filters;
-const moduleApi = {
-  factory(name, factory) {
-    assert.strictEqual(name, 'volShiftFilters');
-    filters = factory();
-    return moduleApi;
-  },
-  controller() {
-    return moduleApi;
-  },
-};
-const angular = {module() { return moduleApi; }};
-vm.runInNewContext(source, {angular, Date, CRM: {}, jQuery: {}, _: {}});
+const assert = require('assert');
+const {makeAngular, makeUnderscore, makeCRM, loadInNewContext} = require('./harness');
+
+const {angular, registry} = makeAngular();
+const underscore = makeUnderscore();
+const {CRM} = makeCRM({_: underscore});
+loadInNewContext('ang/volunteer/Shifts.js', {angular, CRM, _: underscore});
+const filters = registry.factories.volShiftFilters();
 
 const presets = {
   now: '2026-08-19 14:30:00',

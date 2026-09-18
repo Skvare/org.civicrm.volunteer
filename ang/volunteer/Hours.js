@@ -195,8 +195,11 @@
     }
 
     $scope.saveHours = function() {
+      // The sheet is not saved and the user has been told why. The buttons
+      // that call this do not chain on the result, so resolve rather than
+      // leave a rejection nobody handles.
       if (!validateRows()) {
-        return $q.reject(false);
+        return $q.resolve();
       }
       var entries = _.map(payloadRows(), function(row) {
         return {
@@ -222,7 +225,8 @@
       }).finally(function() {
         $scope.workflow.saving = false;
       });
-      return crmStatus({start: ts('Saving hours…'), success: ts('Volunteer hours saved')}, request);
+      return crmStatus({start: ts('Saving hours…'), success: ts('Volunteer hours saved')}, request)
+        .catch(angular.noop);
     };
     $scope.workflow.save = $scope.saveHours;
 

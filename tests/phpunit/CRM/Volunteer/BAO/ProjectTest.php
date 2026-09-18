@@ -28,6 +28,35 @@ class CRM_Volunteer_BAO_ProjectTest extends VolunteerTestAbstract {
     $this->assertObjectHasProperty('id', $project);
   }
 
+  /**
+   * A site whose administrator saved the settings form without choosing
+   * default profiles stores an array of empty audiences. That is "no
+   * choice", so new projects must still get the shipped signup profile.
+   */
+  public function testDefaultProfilesFallBackToSignupWhenEveryAudienceIsBlank(): void {
+    $signupProfileId = CRM_Volunteer_BAO_Project::getDefaultSignupProfileId();
+    $this->assertNotNull($signupProfileId, 'The installer ships a volunteer_sign_up profile.');
+    $original = Civi::settings()->get('volunteer_project_default_profiles');
+    try {
+      foreach (array(NULL, array(), array('primary' => array(), 'additional' => array(), 'both' => array())) as $stored) {
+        Civi::settings()->set('volunteer_project_default_profiles', $stored);
+        $profiles = CRM_Volunteer_BAO_Project::composeDefaultSettingsArray()['profiles'];
+        $this->assertCount(1, $profiles, 'Stored ' . json_encode($stored) . ' must fall back to one profile.');
+        $this->assertSame($signupProfileId, (int) $profiles[0]['uf_group_id']);
+        $this->assertSame('primary', $profiles[0]['module_data']['audience']);
+      }
+
+      // A real choice is honoured, and the fallback stays out of the way.
+      Civi::settings()->set('volunteer_project_default_profiles', array('primary' => array(), 'additional' => array($signupProfileId), 'both' => array()));
+      $profiles = CRM_Volunteer_BAO_Project::composeDefaultSettingsArray()['profiles'];
+      $this->assertCount(1, $profiles);
+      $this->assertSame('additional', $profiles[0]['module_data']['audience']);
+    }
+    finally {
+      Civi::settings()->set('volunteer_project_default_profiles', $original);
+    }
+  }
+
   public function testProjectRetrieve(): void {
     $project = CRM_Core_DAO::createTestObject('CRM_Volunteer_BAO_Project');
     $this->assertObjectHasProperty('id', $project, 'Failed to prepopulate Volunteer Project');

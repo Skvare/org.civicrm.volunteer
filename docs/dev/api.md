@@ -21,8 +21,8 @@ CiviVolunteer's API surface is API4-first. Every runtime call the extension make
 * `get` / `create` / `update` / `delete` — field-level writes through the guarded BAOs. `delete` delegates to `CRM_Volunteer_BAO_Project::deleteProject()` and is refused while assignments exist.
 * `commit` — the aggregate write used by the project editor: contacts, profiles and nested location in one call.
 * `search` — aggregate read supporting the filters a plain DAO get cannot express (`project_contacts`, `proximity`, `beneficiary`). Public reads return an allow-list of public fields; `context: 'edit'` returns full rows to authorized editors.
-* `getManageData` — the per-project data bundle for the management screens.
 * `getManageOverview` — the list/dashboard bundle: summary metrics, enriched project rows (beneficiaries, campaign label, upcoming roles, next shift, staffing), attention queue, up-next and this-week records.
+* `getWorkflowContext(projectId)` — the per-project bundle the editing workflow reads on every step: the project (edit context), its needs and assignments, the capacity summary, the workflow and project supporting data, and beneficiary display names. Each part is produced by the same guarded read as the corresponding standalone action.
 * `getLocationOptions`, `getLocation`, `saveLocation` — location block reads and writes. Writes go to a private location block so shared locations are never modified.
 * `removeProfile` — removes a project's profile join, verifying it belongs to the project.
 
@@ -49,7 +49,7 @@ Read-only rows over a database view: one row per non-deleted volunteer activity 
 
 ### VolunteerUtil
 
-`getPermissions`, `loadBackbone`, `getProfiles`, `getSupportingData`, `getCountries`, `getCustomFields` — the reads the Angular/legacy UIs use. `getSupportingData` and `getCountries` are public and check contextually.
+`getPermissions`, `getProfiles`, `getSupportingData`, `getCountries`, `getCustomFields` — the reads the Angular UI uses. `getSupportingData` and `getCountries` are public and check contextually.
 
 ## Permissions and safety rules
 

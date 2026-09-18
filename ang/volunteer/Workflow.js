@@ -108,35 +108,6 @@
       return supportingPromise;
     }
 
-    function beneficiaryNames(projectId, supporting) {
-      var beneficiaryType = _.find(supporting.project.relationship_types || {}, function(type) {
-        return type.name === 'volunteer_beneficiary';
-      });
-      if (!beneficiaryType) {
-        return $q.resolve([]);
-      }
-      return crmApi4('VolunteerProjectContact', 'get', {
-        select: ['contact_id'],
-        where: [
-          ['project_id', '=', parseInt(projectId, 10)],
-          ['relationship_type_id', '=', parseInt(beneficiaryType.value, 10)]
-        ]
-      }).then(function(rows) {
-        var ids = _.chain(rows).pluck('contact_id').map(function(id) { return parseInt(id, 10); }).uniq().value();
-        if (!ids.length) {
-          return [];
-        }
-        return crmApi4('Contact', 'get', {
-          select: ['id', 'display_name'],
-          where: [['id', 'IN', ids]]
-        }).then(function(contacts) {
-          return _.pluck(contacts, 'display_name');
-        }, function() {
-          return ids.map(function(id) { return ts('Contact %1', {1: id}); });
-        });
-      });
-    }
-
     function summarize(needs, assignments) {
       var needIds = {};
       var total = 0;
@@ -167,22 +138,35 @@
       });
     }
 
+    // One request for everything a workflow step needs. The server bundles
+    // the same guarded reads getProject/getNeeds/getAssignments/getCapacity
+    // and getSupportingData perform individually, so a step change costs one
+    // round trip instead of six or seven.
     function loadContext(projectId) {
-      return $q.all({
-        project: getProject(projectId),
-        needs: getNeeds(projectId, false),
-        assignments: getAssignments(projectId),
-        capacity: getCapacity(projectId),
-        supporting: getSupportingData()
-      }).then(function(result) {
-        return beneficiaryNames(projectId, result.supporting).then(function(names) {
-          result.beneficiaryNames = names;
-          result.summary = result.capacity
-            ? {filled: result.capacity.filled, total: result.capacity.total}
-            : summarize(result.needs, result.assignments);
-          result.filledByNeed = (result.capacity && result.capacity.by_need) || {};
-          return result;
-        });
+      return crmApi4('VolunteerProject', 'getWorkflowContext', {
+        projectId: parseInt(projectId, 10)
+      }).then(function(rows) {
+        var context = rows[0];
+        if (!context || !context.project) {
+          return $q.reject({is_error: 1, error_message: ts('The volunteer project does not exist.')});
+        }
+        context.project.is_active = context.project.is_active == 1;
+        context.needs = context.needs || [];
+        context.assignments = context.assignments || [];
+        context.capacity = context.capacity || null;
+        context.supporting = context.supporting || {workflow: {}, project: {}};
+        context.beneficiaryNames = context.beneficiary_names || [];
+        delete context.beneficiary_names;
+        context.summary = context.capacity
+          ? {filled: context.capacity.filled, total: context.capacity.total}
+          : summarize(context.needs, context.assignments);
+        context.filledByNeed = (context.capacity && context.capacity.by_need) || {};
+        // The bundle carries the supporting data too; seed the shared cache so
+        // a step that also calls getSupportingData() does not fetch it again.
+        if (!supportingPromise) {
+          supportingPromise = $q.resolve(context.supporting);
+        }
+        return context;
       });
     }
 
@@ -363,7 +347,10 @@
         return volWorkflow.preview(ctrl.workflow.projectId);
       };
       ctrl.setActive = function() {
-        return volWorkflow.setActive(ctrl.workflow, ctrl.workflow.project.is_active);
+        // crmStatus has already shown the failure and setActive() has
+        // restored the previous value; nothing further listens, so swallow
+        // the rejection rather than leave it unhandled.
+        return volWorkflow.setActive(ctrl.workflow, ctrl.workflow.project.is_active).catch(angular.noop);
       };
       // Hosted inside CiviEvent's Volunteers tab rather than owning the page.
       // The shell then has to drop the chrome the host already provides -- its

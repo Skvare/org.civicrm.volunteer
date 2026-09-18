@@ -7,14 +7,11 @@
 }
 
 /* Shared volunteer-project workflow. The reusable body templates also render
- * in dialogs and standalone compatibility pages, so keep their local tokens
- * on every possible host rather than only on the full-page shell. */
+ * in dialogs and standalone compatibility pages; the design tokens they read
+ * are declared for every host in css/volunteer-tokens.css. */
 .crm-vol-workflow,
 .crm-vol-workflow-dialog,
 .crm-vol-workflow-standalone {
-  --crm-vol-border: var(--crm-border-color, #d5dee8);
-  --crm-vol-muted: var(--crm-inactive-color, #617287);
-  --crm-vol-panel: var(--crm-layer1-bg-color, #f6f8fa);
   background: var(--crm-paper, #fff);
   color: var(--crm-text-color, #263342);
 }
@@ -152,10 +149,9 @@
 
 /* jQuery-UI wrapper for the workflow dialogs -- the dialogClass set in
  * ang/volunteer/Workflow.js. Distinct from .crm-vol-workflow-dialog above,
- * which is the content div *inside* it. These rules used to live in
- * css/volunteer_app.css, which only the CiviEvent tab loads, so the dialogs
- * opened from Manage Volunteer Projects were missing their paper background,
- * content padding and sticky button pane. */
+ * which is the content div *inside* it. The dialogs open from Manage
+ * Volunteer Projects as well as the CiviEvent tab, so their paper background,
+ * content padding and sticky button pane ship with the Angular bundle. */
 .crm-volunteer-workflow-dialog,
 .crm-volunteer-search-workflow-dialog {
   --crm-dialog-bg-color: var(--crm-paper, #fff);
@@ -1708,28 +1704,7 @@ span.crm-button-text {
 }
 
 /* Project list and dashboard -------------------------------------------- */
-/* Tinted surfaces are mixed against --crm-paper rather than taken from
- * Riverlea's --crm-*-light-color tokens. Dark mode redefines the matching
- * --crm-*-ink-color tokens to point AT the light colors but leaves the light
- * colors themselves alone, so a light surface carrying ink-coloured text
- * renders light-on-light. Riverlea publishes its dark palette by redefining
- * :root variables -- there is no class or attribute to hang an override on --
- * so the pairing itself has to be palette-agnostic. --crm-paper IS redefined
- * for dark, so mixing against it keeps every surface/ink pair legible in both. */
-.crm-vol-page,
-.crm-vol-workflow,
-.crm-vol-workflow-dialog,
-.crm-vol-workflow-standalone,
-.crm-vol-public-workflow {
-  --crm-vol-success-surface: color-mix(in srgb, var(--crm-success-color, #287441) 12%, var(--crm-paper, #fff));
-  --crm-vol-warning-surface: color-mix(in srgb, var(--crm-warning-color, #d99b22) 12%, var(--crm-paper, #fff));
-  --crm-vol-warning-tint: color-mix(in srgb, var(--crm-warning-color, #d99b22) 22%, var(--crm-paper, #fff));
-  --crm-vol-info-surface: color-mix(in srgb, var(--crm-info-color, #0878c9) 12%, var(--crm-paper, #fff));
-}
-
 .crm-vol-manage-page {
-  --crm-vol-manage-border: var(--crm-border-color, #d5dee8);
-  --crm-vol-manage-muted: var(--crm-inactive-color, #6f7f91);
   color: var(--crm-text-color, #25313e);
 }
 
@@ -1755,7 +1730,7 @@ span.crm-button-text {
 }
 
 .crm-vol-manage-header p {
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   margin: 0.25rem 0 0;
   max-width: 34rem;
 }
@@ -1772,7 +1747,7 @@ span.crm-button-text {
 .crm-vol-view-toggle button,
 .crm-vol-status-toggle label {
   background: var(--crm-paper, #fff);
-  border: 1px solid var(--crm-vol-manage-border);
+  border: 1px solid var(--crm-vol-border);
   color: var(--crm-text-color, #25313e);
   cursor: pointer;
   margin: 0 0 0 -1px;
@@ -1817,7 +1792,7 @@ span.crm-button-text {
 
 .crm-vol-manage-metric {
   background: var(--crm-layer1-bg-color, #f5f7f9);
-  border: 1px solid var(--crm-vol-manage-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 5px);
   display: flex;
   flex-direction: column;
@@ -1831,13 +1806,13 @@ span.crm-button-text {
 }
 
 .crm-vol-manage-metric strong small {
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   font-size: 0.9rem;
   font-weight: normal;
 }
 
 .crm-vol-manage-metric span {
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   margin-top: 0.35rem;
 }
 
@@ -1876,7 +1851,7 @@ span.crm-button-text {
 }
 
 .crm-vol-bulk-count {
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   margin-left: auto;
 }
 
@@ -1884,7 +1859,7 @@ span.crm-button-text {
 .crm-vol-staffing > span,
 .crm-vol-up-next-grid time,
 .crm-vol-this-week li div > span {
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   display: block;
   font-size: 0.85rem;
   margin-top: 0.15rem;
@@ -1893,7 +1868,7 @@ span.crm-button-text {
 /* Event and campaign context under a project's title in the manage listing. */
 .crm-vol-manage-project-context {
   align-items: center;
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   display: flex;
   flex-wrap: wrap;
   font-size: 0.85rem;
@@ -1924,7 +1899,7 @@ span.crm-button-text {
 
 .crm-vol-archived-badge {
   background: var(--crm-layer1-bg-color, #edf0f3);
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
 }
 
 .crm-vol-staffing strong,
@@ -1946,13 +1921,13 @@ span.crm-button-text {
 }
 
 .crm-vol-edit-button {
-  border: 1px solid var(--crm-vol-manage-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 4px);
   padding: 0.35rem 0.65rem;
 }
 
 .crm-vol-manage-actionlinks .crm-vol-actions-menu > summary {
-  border: 1px solid var(--crm-vol-manage-border);
+  border: 1px solid var(--crm-vol-border);
   font-size: 1.2rem;
   justify-content: center;
   min-width: 2rem;
@@ -1960,9 +1935,9 @@ span.crm-button-text {
 
 .crm-vol-list-footer {
   background: var(--crm-layer1-bg-color, #f5f7f9);
-  border: 1px solid var(--crm-vol-manage-border);
+  border: 1px solid var(--crm-vol-border);
   border-top: 0;
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   padding: 0.75rem 1rem;
 }
 
@@ -1979,7 +1954,7 @@ span.crm-button-text {
 .crm-vol-dashboard-section h2,
 .crm-vol-this-week h2 {
   background: transparent;
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   font-size: 0.85rem;
   letter-spacing: 0.08em;
   margin: 0 0 0.55rem;
@@ -2034,7 +2009,7 @@ span.crm-button-text {
 .crm-vol-up-next-grid article,
 .crm-vol-this-week {
   background: var(--crm-paper, #fff);
-  border: 1px solid var(--crm-vol-manage-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 5px);
   padding: 0.9rem 1rem;
 }
@@ -2046,7 +2021,7 @@ span.crm-button-text {
 }
 
 .crm-vol-up-next-grid p {
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   margin-top: 0.6rem;
 }
 
@@ -2068,7 +2043,7 @@ span.crm-button-text {
 
 .crm-vol-this-week li {
   align-items: start;
-  border-bottom: 1px solid var(--crm-vol-manage-border);
+  border-bottom: 1px solid var(--crm-vol-border);
   display: grid;
   gap: 0.65rem;
   /* 3rem is 48px and "Wed 19" needs about 52px, so every row wrapped. */
@@ -2081,9 +2056,9 @@ span.crm-button-text {
 }
 
 .crm-vol-dashboard-empty {
-  border: 1px dashed var(--crm-vol-manage-border);
+  border: 1px dashed var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 5px);
-  color: var(--crm-vol-manage-muted);
+  color: var(--crm-vol-muted);
   padding: 1rem;
 }
 

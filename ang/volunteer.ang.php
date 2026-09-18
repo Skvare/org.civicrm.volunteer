@@ -20,7 +20,7 @@ return [
     'ang/volunteer/*.js',
     'ang/volunteer/*/*.js'
   ],
-  'css' => ['ang/volunteer.css', 'css/public_workflow.css'],
+  'css' => ['css/volunteer-tokens.css', 'ang/volunteer.css', 'css/public_workflow.css'],
   'partials' => ['ang/volunteer'],
   'settingsFactory' => ['CRM_Volunteer_Page_Angular', 'loadSettings'],
   // The project Hours report requires this core permission in addition to the

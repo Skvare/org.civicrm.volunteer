@@ -1,86 +1,22 @@
 'use strict';
 
-// Behavioural checks for the VolunteerHours controller (ang/volunteer/Hours.js).
+// Behavioural checks for the VolunteerHours controller (ang/volunteer/Hours.js):
+// the minutes/hours conversion in both directions, the payload snapshot behind
+// isDirty()/markPristine(), validateRows(), the bulk-hours guards and the
+// attended summary.
 //
-// The controller is captured through a fake angular.module() — the
-// shift-filter.test.js pattern — then invoked with a hand-built $scope,
-// synchronous thenables and recording stubs, so every assertion below
-// exercises the real conversion, validation and dirty-state code and its
-// return values, not source text.
-//
-// The source executes under vm.runInThisContext rather than a new vm context:
-// Hours.js builds its row/payload objects inside the vm, and
-// assert.deepStrictEqual refuses objects whose prototypes come from another
-// realm. Running here (with `angular`/`CRM` installed as temporary globals)
-// keeps the same capture pattern while allowing strict structural comparison.
+// The source executes in this context rather than a new vm context: Hours.js
+// builds its row/payload objects inside the vm, and assert.deepStrictEqual
+// refuses objects whose prototypes come from another realm.
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const {makeAngular, makeUnderscore, makeCRM, resolved, loadInThisContext} = require('./harness');
 
-const extensionRoot = path.resolve(__dirname, '..', '..');
-const source = fs.readFileSync(path.join(extensionRoot, 'ang/volunteer/Hours.js'), 'utf8');
-
-// A thenable whose .then/.finally callbacks run at once, so controller
-// construction and saveHours() complete synchronously inside the test.
-function resolved(value) {
-  const promise = {
-    then(onFulfilled) { return resolved(onFulfilled ? onFulfilled(value) : value); },
-    finally(onSettled) { if (onSettled) { onSettled(); } return promise; },
-  };
-  return promise;
-}
-
-// The lodash surface Hours.js uses through CRM._.
-const lodash = {
-  map(list, fn) { return (list || []).map(fn); },
-  filter(list, fn) { return (list || []).filter(fn); },
-  reduce(list, fn, initial) { return (list || []).reduce(fn, initial); },
-  find(list, fn) { return (list || []).find(fn); },
-  findWhere(list, attrs) {
-    return (list || []).find(item => Object.keys(attrs).every(key => item[key] === attrs[key]));
-  },
-  without(list, ...drop) { return (list || []).filter(item => drop.indexOf(item) < 0); },
-};
-
-const alerts = [];
-// CiviCRM's ts substitutes %1, %2, ... — enough for the strings asserted here.
-function translate(text, params) {
-  if (!params) { return text; }
-  return Object.keys(params).reduce((out, key) => out.replace('%' + key, String(params[key])), text);
-}
-const CRM = {
-  ts: () => translate,
-  alert: (message, title, type) => alerts.push({message, title, type}),
-  vars: {},
-  _: lodash,
-  $: () => {},
-};
-
-let controller;
-const moduleApi = {
-  controller(name, definition) {
-    assert.strictEqual(name, 'VolunteerHours');
-    controller = definition;
-    return moduleApi;
-  },
-};
-const angular = {
-  module() { return moduleApi; },
-  forEach(collection, fn) { (collection || []).forEach((value, key) => fn(value, key)); },
-  toJson: value => JSON.stringify(value),
-  noop: () => {},
-};
-
-// The globals stay installed until the end of the file: the controller body
-// resolves `CRM` through the global binding at call time, not capture time.
-// They are restored after the last assertion (a failed assertion exits this
-// standalone process immediately, so leakage is not a concern).
-const savedGlobals = {angular: global.angular, CRM: global.CRM};
-global.angular = angular;
-global.CRM = CRM;
-vm.runInThisContext(source);
+const {angular, registry} = makeAngular();
+const {CRM, alerts} = makeCRM({_: makeUnderscore()});
+const restoreGlobals = loadInThisContext('ang/volunteer/Hours.js', {angular, CRM});
+const controller = registry.controllers.VolunteerHours;
+assert.strictEqual(typeof controller, 'function');
 
 // crmApi4 stub: records every call; apiResponses queues results per entity.action.
 const apiCalls = [];
@@ -103,6 +39,7 @@ const volWorkflow = {
 };
 const q = {
   all: promises => resolved(promises),
+  resolve: value => resolved(value),
   reject: reason => ({rejectedWith: reason}),
 };
 const statusOptions = [];
@@ -219,15 +156,17 @@ assert.strictEqual(statusOptions[statusOptions.length - 1].success, 'Volunteer h
 // --- validateRows gates: new row needs a contact, every row needs a status
 // --- and non-negative numeric hours.
 const logHoursBefore = logHoursCalls().length;
+const alertsBeforeInvalid = alerts.length;
 scope.rows = [{_new: true, assignee_contact_id: null, volunteer_need_id: 5, status_id: 2, hours: 1}];
-assert.strictEqual(scope.saveHours().rejectedWith, false, 'A new row without a volunteer must reject.');
+scope.saveHours();
 scope.rows = [{_new: true, assignee_contact_id: 202, volunteer_need_id: 5, status_id: null, hours: 1}];
-assert.strictEqual(scope.saveHours().rejectedWith, false, 'A row without a status must reject.');
+scope.saveHours();
 scope.rows = [{id: 11, assignee_contact_id: 101, volunteer_need_id: 21, status_id: 2, hours: -0.5}];
-assert.strictEqual(scope.saveHours().rejectedWith, false, 'Negative hours must reject.');
+scope.saveHours();
 scope.rows = [{id: 11, assignee_contact_id: 101, volunteer_need_id: 21, status_id: 2, hours: 'lots'}];
-assert.strictEqual(scope.saveHours().rejectedWith, false, 'Non-numeric hours must reject.');
+scope.saveHours();
 assert.strictEqual(logHoursCalls().length, logHoursBefore, 'Invalid sheets must not reach the API.');
+assert.strictEqual(alerts.length, alertsBeforeInvalid + 4, 'Each invalid sheet is explained: no volunteer, no status, negative hours, non-numeric hours.');
 assert.strictEqual(alerts[alerts.length - 1].title, 'Check hour entries');
 
 // Null hours are legitimate (attended, no duration recorded) and must save.
@@ -301,7 +240,6 @@ scope.rows[0].status_id = 3;
 scope.markAllAttended();
 assert.strictEqual(scope.rows[0].status_id, 2);
 
-global.angular = savedGlobals.angular;
-global.CRM = savedGlobals.CRM;
+restoreGlobals();
 
 console.log('Volunteer hours entry behavior checks passed.');

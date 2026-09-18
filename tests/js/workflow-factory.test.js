@@ -2,10 +2,8 @@
 
 // Behavioral checks for the volWorkflow factory in ang/volunteer/Workflow.js:
 // summarize() capacity totals, projectPath() normalization, setActive()
-// optimistic flip and revert, the consumeAppNavigation() one-shot flag, and
-// the cancel() branches. The factory is captured with a fake angular module
-// and invoked directly with stub services; the APIv4 stub is always named
-// crmApi4.
+// optimistic flip and revert, the consumeAppNavigation() one-shot flag, the
+// cancel() branches, and the single-request loadContext() bundle.
 //
 // summarize() counts a need only when it has a finite positive quantity and
 // is neither flexible nor inactive — the same rule as Assign.js isCounted()
@@ -13,116 +11,16 @@
 // move together.
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const {
+  makeAngular, makeUnderscore, makeCRM, makeQ, makeApi, settle, deepEqual, loadInNewContext,
+} = require('./harness');
 
-const extensionRoot = path.resolve(__dirname, '..', '..');
-const source = fs.readFileSync(path.join(extensionRoot, 'ang/volunteer/Workflow.js'), 'utf8');
-
-const factories = {};
-const controllers = {};
-const moduleApi = {
-  factory(name, factory) { factories[name] = factory; return moduleApi; },
-  controller(name, controller) { controllers[name] = controller; return moduleApi; },
-  component() { return moduleApi; },
-  config() { return moduleApi; },
-  run() { return moduleApi; },
-};
-const angular = {
-  module() { return moduleApi; },
-  forEach(object, fn) {
-    if (object === null || object === undefined) { return; }
-    if (Array.isArray(object)) { object.forEach(fn); }
-    else { Object.keys(object).forEach((key) => fn(object[key], key)); }
-  },
-  isFunction: (value) => typeof value === 'function',
-  noop() {},
-};
-
-function makeUnderscore() {
-  const wrap = (value) => ({
-    value,
-    map(fn) { return wrap(value.map(fn)); },
-    filter(fn) { return wrap(value.filter(fn)); },
-    uniq() { return wrap(Array.from(new Set(value))); },
-    pluck(key) { return wrap(value.map((item) => item[key])); },
-    value() { return value; },
-  });
-  return {
-    chain: wrap,
-    keys: Object.keys,
-    values: (object) => Object.values(object || {}),
-    map: (list, fn) => (list || []).map(fn),
-    filter: (list, fn) => (list || []).filter(fn),
-    find: (list, fn) => (Array.isArray(list) ? list.find(fn) : Object.values(list || {}).find(fn)),
-    pluck: (list, key) => (list || []).map((item) => item[key]),
-  };
-}
-
+const {angular, registry} = makeAngular();
 const underscore = makeUnderscore();
-const confirmations = [];
-const bodyTriggers = [];
-const CRM = {
-  $: (selector) => ({trigger: (event) => bodyTriggers.push({selector, event})}),
-  _: underscore,
-  ts: () => (text, params) => String(text).replace(
-    /%1/g, params && params[1] !== undefined ? String(params[1]) : '%1'
-  ),
-  alert: () => {},
-  confirm: (options) => ({
-    on(event, callback) {
-      if (event === 'crmConfirm:yes') { confirmations.push({options, callback}); }
-      return this;
-    },
-  }),
-  url: (route) => 'url:' + route,
-  utils: {},
-  vars: {},
-};
-
-vm.runInNewContext(source, {angular, Date, CRM, jQuery: {}, _: underscore});
+const {CRM, confirmations, bodyTriggers} = makeCRM({_: underscore});
+loadInNewContext('ang/volunteer/Workflow.js', {angular, CRM, _: underscore});
+const factories = registry.factories;
 assert.strictEqual(typeof factories.volWorkflow, 'function');
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-// Values produced inside the vm context carry the vm realm's prototypes, so
-// deep comparisons go through a host-realm round trip first.
-const deepEqual = (actual, expected, message) => assert.deepStrictEqual(
-  JSON.parse(JSON.stringify(actual)), expected, message
-);
-
-function makeQ() {
-  const all = (work) => {
-    if (Array.isArray(work)) { return Promise.all(work); }
-    const keys = Object.keys(work);
-    return Promise.all(keys.map((key) => work[key])).then((values) => {
-      const result = {};
-      keys.forEach((key, index) => { result[key] = values[index]; });
-      return result;
-    });
-  };
-  const deferred = () => {
-    const result = {};
-    result.promise = new Promise((resolve, reject) => {
-      result.resolve = resolve;
-      result.reject = reject;
-    });
-    return result;
-  };
-  return {resolve: (value) => Promise.resolve(value), reject: (error) => Promise.reject(error), defer: deferred, all};
-}
-
-function makeApi() {
-  const calls = [];
-  const responses = [];
-  const crmApi4 = (entity, action, params) => {
-    calls.push({entity, action, params});
-    const response = responses.length ? responses.shift() : {rows: [{}]};
-    return response.error ? Promise.reject(response.error) : Promise.resolve(response.rows);
-  };
-  return {crmApi4, calls, responses};
-}
 
 function buildWorkflow() {
   const paths = [];
@@ -272,6 +170,58 @@ function buildWorkflow() {
     assert.strictEqual(eventTab.state.reloads, 1, 'the route is reloaded to re-read the event');
     deepEqual(bodyTriggers[bodyTriggers.length - 1], {selector: 'body', event: 'volunteerProjectCancel'},
       'the cancel event is still announced for listeners');
+  }
+
+  // -- loadContext(): one bundled request, unpacked for the steps ---------------------
+
+  {
+    const {volWorkflow, api} = buildWorkflow();
+    api.responses.push({rows: [{
+      project: {id: 42, title: 'Harvest Festival', is_active: '1'},
+      needs: [{id: 5, quantity: '2', is_flexible: 0, is_active: 1}],
+      assignments: [{id: 900, volunteer_need_id: 5}],
+      capacity: {project_id: 42, filled: 1, total: 2, by_need: {5: 1}},
+      supporting: {workflow: {roles: [{id: 3, label: 'Greeter'}]}, project: {phone_types: {}}},
+      beneficiary_names: ['Friends of the Festival'],
+    }]});
+    const context = await volWorkflow.loadContext('42');
+
+    assert.strictEqual(api.calls.length, 1, 'a step change costs one request');
+    assert.strictEqual(api.calls[0].entity, 'VolunteerProject');
+    assert.strictEqual(api.calls[0].action, 'getWorkflowContext');
+    deepEqual(api.calls[0].params, {projectId: 42}, 'the project id is sent as a number');
+
+    assert.strictEqual(context.project.is_active, true, 'the project status is a real boolean');
+    deepEqual(context.summary, {filled: 1, total: 2}, 'the header summary comes from the capacity summary');
+    deepEqual(context.filledByNeed, {5: 1});
+    deepEqual(context.beneficiaryNames, ['Friends of the Festival']);
+    assert.ok(!('beneficiary_names' in context), 'the wire name is not left on the context');
+    deepEqual(context.supporting.workflow.roles, [{id: 3, label: 'Greeter'}]);
+
+    // The bundle seeds the shared supporting-data cache, so a step that also
+    // asks for it does not issue a second request.
+    const supporting = await volWorkflow.getSupportingData();
+    assert.strictEqual(api.calls.length, 1, 'supporting data is served from the bundle');
+    deepEqual(supporting.project, {phone_types: {}});
+
+    // Without a capacity summary the header falls back to counting rows.
+    api.responses.push({rows: [{
+      project: {id: 42, title: 'Harvest Festival', is_active: 0},
+      needs: [{id: 5, quantity: '2', is_flexible: 0, is_active: 1}],
+      assignments: [{id: 900, volunteer_need_id: 5}, {id: 901, volunteer_need_id: 5}],
+      capacity: null,
+      supporting: {workflow: {}, project: {}},
+      beneficiary_names: [],
+    }]});
+    const counted = await volWorkflow.loadContext(42);
+    assert.strictEqual(counted.project.is_active, false);
+    deepEqual(counted.summary, {filled: 2, total: 2}, 'summarize() stands in for a missing capacity summary');
+    deepEqual(counted.filledByNeed, {});
+
+    // An empty result is the not-found case the steps already handle.
+    api.responses.push({rows: []});
+    const missing = await volWorkflow.loadContext(99).then(() => null, (error) => error);
+    assert.strictEqual(missing.error_message, 'The volunteer project does not exist.');
   }
 
   console.log('Volunteer workflow factory behavior checks passed.');

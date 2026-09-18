@@ -218,9 +218,10 @@
     };
 
     $scope.initials = function(name) {
+      // CRM._ is lodash 3, where first() takes no count; take() does.
       return _.chain(String(name || '').split(/\s+/))
         .filter(function(part) { return !!part; })
-        .first(2)
+        .take(2)
         .map(function(part) { return part.charAt(0).toUpperCase(); })
         .value()
         .join('');
@@ -238,17 +239,32 @@
 
     // -- mutations ------------------------------------------------------------
 
+    // One pick, one assignment. The entity-reference widget answers a
+    // selection twice: core's crmEntityref and Angular's own input binding
+    // both listen for the change event, and once the first has committed and
+    // this handler has cleared the model, the second sees the same contact
+    // as a new value and commits it again. In a browser that created two
+    // activities for every person added. Remember what is in flight per
+    // shift and let the echo through as a no-op.
+    var adding = {};
     $scope.addVolunteer = function(need) {
       var contactId = parseInt($scope.newContacts[need.id], 10);
       if (!contactId) {
         return;
       }
+      $scope.newContacts[need.id] = null;
+      if (adding[need.id] === contactId) {
+        return;
+      }
+      adding[need.id] = contactId;
       var values = needValues(need, isAvailableNeed(need));
       values.contact_id = contactId;
-      $scope.newContacts[need.id] = null;
       return track(crmApi4('VolunteerAssignment', 'create', {values: values}))
         .then(refreshAssignments)
-        .catch(angular.noop);
+        .catch(angular.noop)
+        .finally(function() {
+          delete adding[need.id];
+        });
     };
 
     $scope.removeVolunteer = function(assignment) {
@@ -296,8 +312,9 @@
         return $q.resolve();
       }
       if ($scope.isFull(target)) {
+        // Refused, and already explained; nothing chains on the result.
         CRM.alert(ts('%1 is already fully staffed.', {1: $scope.needLabel(target)}), ts('No open spots'), 'warning');
-        return $q.reject(false);
+        return $q.resolve();
       }
       var sourceList = listFor(sourceNeedId);
       var targetList = listFor(targetNeedId);
@@ -336,7 +353,7 @@
       }
       if ($scope.isFull(target)) {
         CRM.alert(ts('%1 is already fully staffed.', {1: $scope.needLabel(target)}), ts('No open spots'), 'warning');
-        return $q.reject(false);
+        return $q.resolve();
       }
       var values = needValues(target, isAvailableNeed(target));
       values.contact_id = parseInt(assignment.assignee_contact_id, 10);
@@ -398,7 +415,7 @@
     $scope.addShift = function() {
       if (!$scope.roles.length) {
         CRM.alert(ts('Set up at least one volunteer role before adding shifts.'), ts('No roles available'), 'warning');
-        return $q.reject(false);
+        return $q.resolve();
       }
       var midnight = new Date();
       midnight.setHours(0, 0, 0, 0);
@@ -454,7 +471,7 @@
   /**
    * Makes an element a jQuery UI drag source carrying an assignment id.
    * jQuery UI ships in CiviCRM's core resource list, so this needs no extra
-   * dependency; the legacy Backbone assign screen used the same pair.
+   * dependency.
    */
   angular.module('volunteer').directive('crmVolDraggableVolunteer', function() {
     return {

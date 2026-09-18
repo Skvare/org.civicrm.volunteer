@@ -5,121 +5,18 @@
 // beneficiary_options merge in applyOverview() (a positional zip would
 // mislabel beneficiaries whenever one name fails to resolve), the
 // associatedEntityTitle() fallback, and localDate() site-value parsing.
-// The controller is captured with a fake angular module and driven with a mock
-// $scope; the APIv4 stub is always named crmApi4.
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const {
+  makeAngular, makeUnderscore, makeCRM, makeQ, makeApi, settle, deepEqual, makeDateFilter, loadInNewContext,
+} = require('./harness');
 
-const extensionRoot = path.resolve(__dirname, '..', '..');
-const source = fs.readFileSync(path.join(extensionRoot, 'ang/volunteer/Projects.js'), 'utf8');
-
-const controllers = {};
-const moduleApi = {
-  config() { return moduleApi; },
-  controller(name, controller) { controllers[name] = controller; return moduleApi; },
-};
-const angular = {
-  module() { return moduleApi; },
-  copy(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); },
-  forEach(object, fn) {
-    if (object === null || object === undefined) { return; }
-    if (Array.isArray(object)) { object.forEach(fn); }
-    else { Object.keys(object).forEach((key) => fn(object[key], key)); }
-  },
-  noop() {},
-};
-
-function makeUnderscore() {
-  return {
-    isArray: Array.isArray,
-    keys: Object.keys,
-    values: (object) => Object.values(object || {}),
-    map: (list, fn) => (list || []).map(fn),
-    filter: (list, fn) => (list || []).filter(fn),
-    find: (list, fn) => (Array.isArray(list) ? list.find(fn) : Object.values(list || {}).find(fn)),
-    some: (list, fn) => (list || []).some(fn),
-    every: (list, fn) => (list || []).every(fn),
-    where: (list, props) => (list || []).filter(
-      (item) => Object.keys(props).every((key) => item[key] === props[key])
-    ),
-  };
-}
-
+const {angular, registry} = makeAngular();
 const underscore = makeUnderscore();
-const CRM = {
-  $: () => ({trigger() {}}),
-  _: underscore,
-  ts: () => (text, params) => String(text).replace(
-    /%1/g, params && params[1] !== undefined ? String(params[1]) : '%1'
-  ),
-  alert: () => {},
-  confirm: () => ({on() { return this; }}),
-  url: (route) => 'url:' + route,
-  checkPerm: () => true,
-  volunteer: {isCampaignEnabled: true, isEventEnabled: true, campaignFilter: {}},
-  vars: {},
-};
-
-const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const weekdaysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-  'August', 'September', 'October', 'November', 'December'];
-const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function makeFilter() {
-  const calls = [];
-  const pad = (value) => (value < 10 ? '0' + value : String(value));
-  // Placeholder tokens first, so weekday/month names containing "d" or "M"
-  // are never re-replaced while expanding the angular date patterns used.
-  const format = (date, pattern) => pattern
-    .replace('EEEE', '\u0000')
-    .replace('EEE', '\u0001')
-    .replace('MMMM', '\u0002')
-    .replace('MMM', '\u0003')
-    .replace('h:mm a', '\u0004')
-    .replace('d', '\u0005')
-    .replace('\u0000', weekdays[date.getDay()])
-    .replace('\u0001', weekdaysShort[date.getDay()])
-    .replace('\u0002', months[date.getMonth()])
-    .replace('\u0003', monthsShort[date.getMonth()])
-    .replace('\u0004', ((date.getHours() % 12) || 12) + ':' + pad(date.getMinutes())
-      + ' ' + (date.getHours() < 12 ? 'AM' : 'PM'))
-    .replace('\u0005', String(date.getDate()));
-  const filter = (name) => (date, pattern) => {
-    calls.push({name, date, pattern});
-    return format(date, pattern);
-  };
-  return {filter, calls};
-}
-
-vm.runInNewContext(source, {angular, Date, CRM, jQuery: {}, _: underscore});
+const {CRM} = makeCRM({_: underscore});
+loadInNewContext('ang/volunteer/Projects.js', {angular, CRM, _: underscore});
+const controllers = registry.controllers;
 assert.strictEqual(typeof controllers.VolunteerProjects, 'function');
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-// Values produced inside the vm context carry the vm realm's prototypes, so
-// deep comparisons go through a host-realm round trip first.
-const deepEqual = (actual, expected, message) => assert.deepStrictEqual(
-  JSON.parse(JSON.stringify(actual)), expected, message
-);
-
-function makeQ() {
-  return {resolve: (value) => Promise.resolve(value), reject: (error) => Promise.reject(error), all: Promise.all};
-}
-
-function makeApi() {
-  const calls = [];
-  const responses = [];
-  const crmApi4 = (entity, action, params) => {
-    calls.push({entity, action, params});
-    const response = responses.length ? responses.shift() : {rows: [{}]};
-    return response.error ? Promise.reject(response.error) : Promise.resolve(response.rows);
-  };
-  return {crmApi4, calls, responses};
-}
 
 const overview = () => ({
   summary: {active_projects: 2},
@@ -150,7 +47,7 @@ const overview = () => ({
 function buildProjects(options = {}) {
   const scope = {$watch: () => {}, $applyAsync: (fn) => fn()};
   const api = makeApi();
-  const filterService = makeFilter();
+  const filterService = makeDateFilter();
   const viewParams = options.viewParam ? {view: options.viewParam} : {};
   const location = {
     search(query, value) {

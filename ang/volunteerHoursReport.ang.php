@@ -3,5 +3,5 @@
 return [
   'requires' => [],
   'js' => ['ang/volunteerHoursReport.js'],
-  'css' => ['ang/volunteerHoursReport.css'],
+  'css' => ['css/volunteer-tokens.css', 'ang/volunteerHoursReport.css'],
 ];

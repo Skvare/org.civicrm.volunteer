@@ -15,34 +15,12 @@
 function _civicrm_api3_volunteer_util_deprecation() {
   return array(
     'getperms' => 'The "getperms" action is deprecated. Use VolunteerUtil.getPermissions API4 action instead.',
-    'loadbackbone' => 'The "loadbackbone" action is deprecated. Use VolunteerUtil.loadBackbone API4 action instead.',
     'getprofiles' => 'The "getprofiles" action is deprecated. Use VolunteerUtil.getProfiles API4 action instead.',
     'getsupportingdata' => 'The "getsupportingdata" action is deprecated. Use VolunteerUtil.getSupportingData API4 action instead.',
     'getbeneficiaries' => 'The "getbeneficiaries" action is deprecated. Use the VolunteerProjectContact and Contact API4 entities instead.',
     'getcountries' => 'The "getcountries" action is deprecated. Use VolunteerUtil.getCountries API4 action instead.',
     'getcustomfields' => 'The "getcustomfields" action is deprecated. Use VolunteerUtil.getCustomFields API4 action instead.',
   );
-}
-
-/**
- * This function will return the needed pieces to load up the backbone/
- * marionette project backend from within an angular page.
- *
- * @deprecated Use the VolunteerUtil.loadBackbone API4 action.
- *
- * @param array $params
- *   Not presently used.
- * @return array
- *   Keyed with "css," "templates," "scripts," and "settings," this array
- *   contains the dependencies of the backbone-based volunteer app.
- *
- */
-function civicrm_api3_volunteer_util_loadbackbone($params) {
-  $results = \Civi\Api4\VolunteerUtil::loadBackbone(CRM_Volunteer_Permission::shouldCheckPermissions($params))
-    ->execute()
-    ->first();
-
-  return civicrm_api3_create_success($results, $params, 'VolunteerUtil', 'loadbackbone');
 }
 
 /**

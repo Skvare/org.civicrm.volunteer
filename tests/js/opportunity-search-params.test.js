@@ -1,118 +1,21 @@
 'use strict';
 
-// Behavioural checks for the volOppSearch factory (ang/volunteer.js).
+// Behavioural checks for the volOppSearch factory (ang/volunteer.js): hash-URL
+// parsing, API4 parameter mapping and the bookmarkable query-string contract
+// the public opportunity browser depends on.
 //
-// The factory is captured through a fake angular.module() — the
-// shift-filter.test.js pattern — then invoked directly with recording stubs
-// for crmApi4, $location and $route, so every assertion exercises the real
-// query-parameter plumbing: hash-URL parsing, API4 parameter mapping and the
-// bookmarkable query-string contract the public opportunity browser depends on.
-//
-// The source executes under vm.runInThisContext rather than a new vm context:
+// The source executes in this context rather than a new vm context:
 // volOppSearch builds its parameter objects inside the vm, and
 // assert.deepStrictEqual refuses objects whose prototypes come from another
-// realm. Running here (with `angular`/`CRM` installed as temporary globals)
-// keeps the same capture pattern while allowing strict structural comparison.
+// realm.
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const {makeAngular, makeUnderscore, makeCRM, resolved, loadInThisContext} = require('./harness');
 
-const extensionRoot = path.resolve(__dirname, '..', '..');
-const source = fs.readFileSync(path.join(extensionRoot, 'ang/volunteer.js'), 'utf8');
-
-// A thenable whose .then callbacks run at once, so search() completes
-// synchronously and its results are bound before the assertions.
-function resolved(value) {
-  return {
-    then(onFulfilled) { return resolved(onFulfilled ? onFulfilled(value) : value); },
-    finally(onSettled) { if (onSettled) { onSettled(); } return this; },
-  };
-}
-
-// The lodash surface volOppSearch uses through CRM._.
-const lodash = {
-  each(object, fn) { Object.keys(object || {}).forEach(key => fn(object[key], key)); return object; },
-  values: object => Object.keys(object || {}).map(key => object[key]),
-  flatten: list => Array.prototype.concat.apply([], list),
-  transform(object, fn, accumulator) {
-    const result = accumulator !== undefined
-      ? accumulator
-      : (Array.isArray(object) ? [] : {});
-    Object.keys(object || {}).forEach(key => fn(result, object[key], key));
-    return result;
-  },
-  isEmpty(value) {
-    if (Array.isArray(value)) { return value.length === 0; }
-    return value === null || value === undefined || Object.keys(value).length === 0;
-  },
-};
-
-// jQuery.param-style serialisation: nested objects use bracket keys, arrays
-// repeat a []= key. Every object handed to CRM.$.param is recorded first, so
-// assertions can inspect what the source actually serialised.
-const paramInputs = [];
-function paramString(object) {
-  const pairs = [];
-  const add = (key, value) => pairs.push(
-    encodeURIComponent(key) + '=' + encodeURIComponent(value === null || value === undefined ? '' : value)
-  );
-  (function walk(node, prefix) {
-    Object.keys(node || {}).forEach(key => {
-      const value = node[key];
-      const name = prefix ? prefix + '[' + key + ']' : key;
-      if (Array.isArray(value)) {
-        value.forEach(item => add(name + '[]', item));
-      } else if (value !== null && typeof value === 'object') {
-        walk(value, name);
-      } else {
-        add(name, value);
-      }
-    });
-  })(object);
-  return pairs.join('&');
-}
-
-const CRM = {
-  angRequires: () => [],
-  ts: text => () => text,
-  $: {
-    param(object) { paramInputs.push(object); return paramString(object); },
-  },
-  _: lodash,
-};
-
-const factories = {};
-const moduleApi = {
-  factory(name, definition) {
-    factories[name] = Array.isArray(definition) ? definition[definition.length - 1] : definition;
-    return moduleApi;
-  },
-  run() { return moduleApi; },
-  directive() { return moduleApi; },
-};
-const angular = {
-  module() { return moduleApi; },
-  forEach(collection, fn) {
-    if (Array.isArray(collection)) {
-      collection.forEach((value, key) => fn(value, key));
-    } else {
-      Object.keys(collection || {}).forEach(key => fn(collection[key], key));
-    }
-  },
-  isArray: value => Array.isArray(value),
-  isObject: value => value !== null && typeof value === 'object',
-};
-
-// The globals stay installed until the end of the file: the factory body
-// resolves `_` (bound from CRM._) and `CRM.$` through the global binding at
-// call time. They are restored after the last assertion (a failed assertion
-// exits this standalone process immediately, so leakage is not a concern).
-const savedGlobals = {angular: global.angular, CRM: global.CRM};
-global.angular = angular;
-global.CRM = CRM;
-vm.runInThisContext(source);
+const {angular, registry} = makeAngular();
+const {CRM, paramInputs} = makeCRM({_: makeUnderscore()});
+const restoreGlobals = loadInThisContext('ang/volunteer.js', {angular, CRM});
+const factories = registry.factories;
 
 assert.ok(factories.volOppSearch, 'volunteer.js must register the volOppSearch factory.');
 
@@ -244,7 +147,6 @@ const cleaned = paramInputs[paramInputs.length - 1];
 assert.strictEqual(cleaned.beneficiary, '3,9');
 assert.ok(!('date_start' in cleaned), 'Falsy values never reach the serialised URL.');
 
-global.angular = savedGlobals.angular;
-global.CRM = savedGlobals.CRM;
+restoreGlobals();
 
 console.log('Volunteer opportunity search parameter checks passed.');

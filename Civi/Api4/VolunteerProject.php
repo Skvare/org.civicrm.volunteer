@@ -42,8 +42,8 @@ class VolunteerProject extends DAOEntity {
       ->setCheckPermissions($checkPermissions);
   }
 
-  public static function getManageData($checkPermissions = TRUE) {
-    return (new Action\VolunteerProject\GetManageData(self::getEntityName(), __FUNCTION__))
+  public static function getWorkflowContext($checkPermissions = TRUE) {
+    return (new Action\VolunteerProject\GetWorkflowContext(self::getEntityName(), __FUNCTION__))
       ->setCheckPermissions($checkPermissions);
   }
 
@@ -79,8 +79,11 @@ class VolunteerProject extends DAOEntity {
       // context requires project edit rights, a public read only the viewer
       // permission asserted by assertProjectPerms().
       'search' => \CRM_Core_Permission::ALWAYS_ALLOW_PERMISSION,
-      'getManageData' => array(array('edit own volunteer projects', 'edit all volunteer projects')),
       'getManageOverview' => array(array('edit own volunteer projects', 'edit all volunteer projects')),
+      // The bundled reads each apply their own row-level project
+      // authorization; this coarse gate only refuses callers who could not
+      // pass any of them.
+      'getWorkflowContext' => array(array('create volunteer projects', 'edit own volunteer projects', 'edit all volunteer projects')),
       'getLocationOptions' => array(array('create volunteer projects', 'edit own volunteer projects', 'edit all volunteer projects')),
       'getLocation' => array(array('create volunteer projects', 'edit own volunteer projects', 'edit all volunteer projects')),
       'saveLocation' => array(array('create volunteer projects', 'edit own volunteer projects', 'edit all volunteer projects')),

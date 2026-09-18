@@ -322,30 +322,127 @@ Learned the hard way while writing `VolunteerProjectOverviewTest`:
   `CRM_Core_Config::singleton()->userPermissionClass->permissions = array(...)`;
   `setUp()` resets it between tests.
 
-## JavaScript checks
+## JavaScript tests: three layers
 
-Separate and much faster — plain `node`, no database, no dependencies. From
-the extension directory:
+The JavaScript is tested at three levels. Each one catches what the level
+below cannot, and each costs more to set up.
+
+| Layer | Directory | Runs | Needs |
+|---|---|---|---|
+| Behavioural checks | `tests/js` | `tools/run-js-tests.sh` | Node only |
+| AngularJS on the browser stack | `tests/angular` | `npm run test:angular` | `npm install`, a CiviCRM core checkout |
+| End to end | `tests/e2e` | `npm run test:e2e` | `npm install`, a running site with the extension installed |
+
+`npm install` from the extension root installs Jest and Playwright into
+`node_modules/` (gitignored, never in a release archive). Run
+`npx playwright install chromium` once for the browser.
+
+### Behavioural checks (`tests/js`)
+
+Plain `node`, no database, no dependencies. `tools/run-js-tests.sh` runs
+every `tests/js/*.test.js`, prints `PASS`/`FAIL` per file and exits non-zero
+if any check failed; `node tests/js/shift-filter.test.js` runs one.
+
+Each check executes the real controller or factory source under Node's `vm`
+with a fake `angular`, a fake `CRM` and stubbed services, then asserts on
+return values and on what the code sends to the API. The fakes live in
+`tests/js/harness.js`: `makeAngular()` records module registrations,
+`makeCRM()` records alerts, confirmations and body triggers,
+`makeUnderscore()` is the lodash surface the extension reaches through
+`CRM._` (with lodash 3 semantics, which is what CiviCRM ships: `first()`
+takes no count, `take(n)` does), and `makeApi()` is a recording `crmApi4`
+with a per-call response queue.
+
+This layer is fast and dependency-free, and that is also its limit: it sees
+no templates, no dependency injection, no digest. A controller that asks for
+a service the module does not provide, a template binding that never
+renders, or a lodash call whose real semantics differ from the fake all pass
+here. Do not add checks that grep the source text for class names or call
+sites; they fail on any rename and pass on broken code, and the set that
+used to exist was removed for that reason. `hours-report-config.test.js` is
+the one structural check left: it validates the managed Search Kit
+configuration, which is data.
+
+### AngularJS on the browser stack (`tests/angular`)
+
+Jest with a jsdom document, booting what a CiviVolunteer page actually runs:
+jQuery, jQuery UI, select2, jquery-validation, lodash, CiviCRM core's
+`Common.js` and `crm.ajax.js` (so `ts()`, `CRM.ts`, `CRM.checkPerm`,
+`CRM.url` and the `crmEntityRef`/`crmSelect2`/`crmDatepicker` widgets are
+core's own), AngularJS 1.8 with ngRoute, ngSanitize and angular-mocks,
+core's `crmResource`, `crmUi`, `crmUtil`, `api4`, `crmDialog` and `crmApp`
+modules, and then the extension's module with every partial preloaded.
+Each test compiles the real route template against a real scope and drives
+it through Angular's digest.
+
+Only what needs a server or a screen is replaced, and each replacement is a
+recorder a test asserts against: the API4 backend (`recorders.api`, set per
+test with `respond()`), `CRM.alert`, `CRM.confirm` (held, answered with
+`.answer('crmConfirm:yes')`), `CRM.status`, `CRM.loadForm`, and direct
+`CRM.api3`/`CRM.api4` calls from core's widgets. Any other attempt to open a
+socket fails at once. See `tests/angular/setup.js` for the boot and
+`support.js` for the helpers: `boot()` prepares a test, `services()` takes
+services out of the injector (do not wrap an `async` test body in
+`angular.mock.inject`, which discards the returned promise), `settle()`
+lets API promises resolve across digest rounds, and `ui.*` drives inputs the
+way Angular listens for them (`change` for checkboxes, radios and selects,
+`input` for text).
+
+Core is found by walking up from the extension to a composer site's
+`vendor/civicrm/civicrm-core`; set `CIVICRM_CORE` (and `CIVICRM_PACKAGES`
+if it is not the sibling directory) for any other checkout:
 
 ```console
-tools/run-js-tests.sh
+CIVICRM_CORE=/path/to/site/vendor/civicrm/civicrm-core npm run test:angular
 ```
 
-The script runs every `tests/js/*.test.js`, prints `PASS`/`FAIL` per file and
-exits non-zero if any check failed. For a single file while iterating, or as
-a manual fallback:
+This layer found the defects the vm layer had masked: `initials()` on
+lodash 3, a `NaN` role on a new shift, unhandled `$q` rejections. What it
+still cannot see is the server, the real select2 widget behaviour under a
+mouse, and the CMS around the page.
+
+### End to end (`tests/e2e`)
+
+Playwright against a running CiviCRM site with the extension installed, as
+the administrator and as an anonymous visitor. Three settings say where the
+site is and how to reach its command line, from the environment or from
+`tests/e2e/.env` (gitignored; the keys are documented in `.env.example`):
+
+```ini
+CIVIVOLUNTEER_E2E_URL=https://clean-drupal.ddev.site:8443
+CIVIVOLUNTEER_E2E_SITE=/path/to/that/site
+CIVIVOLUNTEER_E2E_SHELL=ddev exec
+```
+
+`CIVIVOLUNTEER_E2E_SHELL` is the prefix that runs a command inside the site
+(empty for a local install). The suite needs `vendor/bin/cv` and
+`vendor/bin/drush` there: `global-setup.js` signs the administrator in
+through `drush uli` and keeps the session in `tests/e2e/.auth/`, grants the
+anonymous role *register to volunteer* if it lacks it, and seeds a project,
+a shift and a volunteer through `cv api4`; `global-teardown.js` removes
+everything the suite created and revokes the permission again if it granted
+it. The specs read the seeded state through the `state` fixture and check
+outcomes in the database through `cv` after acting in the browser.
 
 ```console
-node tests/js/shift-filter.test.js
-for f in tests/js/*.test.js; do node "$f" >/dev/null && echo "PASS $f" || echo "FAIL $f"; done
+npm run test:e2e
+npx playwright test --config tests/e2e/playwright.config.js --headed
+npx playwright test --config tests/e2e/playwright.config.js --grep "signs up"
 ```
 
-The checks are of two kinds. The older files pin source text — class names,
-call sites, binding shapes — and cannot catch a wrong value. The behavioural
-ones instead execute the real Angular code under Node's `vm` with a fake
-`angular` and stubbed services, asserting actual return values (see
-`shift-filter.test.js` for the pattern). Do not treat a green run of the
-text-pin files alone as evidence that anything works.
+A failed step saves a screenshot and a trace under `test-results/`. The
+helpers in `tests/e2e/support.js` are worth knowing: `expectUrl()` waits for
+a navigation and, if it does not happen, fails with whatever CiviCRM
+announced instead (a validation message beats a timeout), `pickEntityRef()`
+drives a select2 entity-reference widget, and `statusBubble()` reads
+`CRM.status`, which is not a notification.
+
+This layer found the defects the other two could not: one pick in the
+Assign search box creating two assignments (two `change` listeners on the
+widget), the settings form printing `Array` for every description, and the
+default-profile fallback failing after the settings form had been saved
+once. It is the slowest layer and the one that tells you the extension
+works.
 
 ## Deliberate headless form-test boundaries
 

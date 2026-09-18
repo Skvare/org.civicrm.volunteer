@@ -7,7 +7,7 @@ use Civi\Api4\VolunteerUtil;
 /**
  * Covers every action on the VolunteerUtil API4 entity.
  *
- * VolunteerUtil carries the UI-support reads the Angular and Backbone screens
+ * VolunteerUtil carries the UI-support reads the Angular screens
  * need. The implementation lives in CRM_Volunteer_BAO_VolunteerUtil; the
  * deprecated api/v3/VolunteerUtil.php actions are thin adapters over these.
  *
@@ -41,18 +41,6 @@ class api_v4_VolunteerUtilTest extends VolunteerTestAbstract {
     }
     // safe_name is what the crmVolPermToClass directive turns into a CSS class.
     $this->assertSame('register_to_volunteer', $byName['register to volunteer']['safe_name']);
-  }
-
-  public function testLoadBackboneDescribesOneResourceBundle(): void {
-    $result = VolunteerUtil::loadBackbone(FALSE)->execute();
-    $this->assertCount(1, $result);
-
-    $resources = $result->first();
-    foreach (array('css', 'templates', 'scripts', 'settings') as $key) {
-      $this->assertArrayHasKey($key, $resources, "loadBackbone omitted $key.");
-    }
-    $this->assertNotEmpty($resources['scripts']);
-    $this->assertNotEmpty($resources['settings']);
   }
 
   public function testGetProfilesReturnsSelectableProfilesAndManagementFlags(): void {
@@ -217,8 +205,8 @@ class api_v4_VolunteerUtilTest extends VolunteerTestAbstract {
         $cameraField = $row;
       }
     }
-    // The Backbone search form needs the group name to build API4 field
-    // expressions (CustomGroupName.field_name) and the option list to render.
+    // Callers need the group name to build API4 field expressions
+    // (CustomGroupName.field_name) and the option list to render choices.
     $this->assertSame('Volunteer_Information', $cameraField['custom_group_id.name']);
     $this->assertNotEmpty($cameraField['options']);
   }

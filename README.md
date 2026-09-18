@@ -44,6 +44,14 @@ Three changes can affect an existing site. Full detail is in
    CiviVolunteer entities. It bypassed all project authorization. Use `create`
    with an `id`, which is guarded and is what core recommends.
 
+## Resources
+
+* [Documentation](https://docs.civicrm.org/volunteer/en/latest/) (in a dedicated guide)
+* [Release downloads](https://civicrm.org/extensions/civivolunteer) (within CiviCRM.org's extensions directory)
+* [Issue tracking (current)](https://github.com/civicrm/org.civicrm.volunteer/issues)
+* [Issue tracking (archived)](https://issues.civicrm.org/jira/browse/VOL) (in a Jira project)
+* [Q&A on StackExchange](http://civicrm.stackexchange.com/questions/tagged/civivolunteer) (with the `civivolunteer` tag)
+
 ## Development tests
 
 The development suite and static-analysis configuration are included in the
@@ -69,6 +77,7 @@ credentials. Run the committed runner from any directory:
 path/to/civivolunteer/tools/run-phpunit.sh
 path/to/civivolunteer/tools/run-phpunit.sh --filter api_v4_VolunteerNeedSearchTest
 path/to/civivolunteer/tools/run-js-tests.sh
+cd path/to/civivolunteer && npm install && npm run test:angular && npm run test:e2e
 ```
 
 Required `.env` variables:
@@ -97,11 +106,18 @@ its name must begin with `civivolunteer_test` or `civivolunteer_phpunit`. The
 seed dump itself is deliberately gitignored (`.env.example` shows how to
 regenerate one); any bootable CiviCRM 6.16 schema works.
 
-The JavaScript runner needs only Node and executes every dependency-free
-behavior/source check under `tests/js`. GitHub CI runs the JavaScript suite,
-PHP syntax checks, and the test-discovery guard on every extension-related
-change. The database-backed suite remains the authoritative pre-merge check;
-its local seed is intentionally not committed or uploaded to CI.
+The JavaScript is tested at three levels, described in
+[`tests/README.md`](tests/README.md): `tools/run-js-tests.sh` runs the
+dependency-free behavioural checks under `tests/js` with Node alone;
+`npm run test:angular` runs the AngularJS module on the real browser stack
+(jQuery, core's `Common.js`, Angular 1.8 with angular-mocks and core's own
+modules) under Jest and jsdom, locating CiviCRM core from a composer site or
+`CIVICRM_CORE`; and `npm run test:e2e` runs Playwright against a running site
+with the extension installed, pointed at by `CIVIVOLUNTEER_E2E_*` (see
+`.env.example`). `npm install` fetches the tooling into `node_modules/`, which
+is never part of a release. The database-backed PHPUnit suite remains the
+authoritative pre-merge check; its local seed is intentionally not committed
+or uploaded to CI.
 
 CiviCRM 6.16's legacy listener first performs a full bootstrap, so a new
 disposable database must initially be seeded with a bootable CiviCRM 6.16

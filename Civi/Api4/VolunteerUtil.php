@@ -18,11 +18,6 @@ class VolunteerUtil extends Generic\AbstractEntity {
       ->setCheckPermissions($checkPermissions);
   }
 
-  public static function loadBackbone($checkPermissions = TRUE) {
-    return (new Action\VolunteerUtil\LoadBackbone(self::getEntityName(), __FUNCTION__))
-      ->setCheckPermissions($checkPermissions);
-  }
-
   public static function getProfiles($checkPermissions = TRUE) {
     return (new Action\VolunteerUtil\GetProfiles(self::getEntityName(), __FUNCTION__))
       ->setCheckPermissions($checkPermissions);
@@ -57,7 +52,6 @@ class VolunteerUtil extends Generic\AbstractEntity {
     ]];
     return [
       'getPermissions' => ['access CiviCRM'],
-      'loadBackbone' => $projectManagement,
       'getProfiles' => 'edit volunteer registration profiles',
       // getSupportingData and getCountries enforce controller/contextual
       // project permissions in the action itself.

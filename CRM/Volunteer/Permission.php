@@ -537,7 +537,7 @@ class CRM_Volunteer_Permission {
   }
 
   /**
-   * Access callback for administrative Angular and Backbone shells.
+   * Access callback for the administrative Angular shells.
    *
    * @return bool
    */

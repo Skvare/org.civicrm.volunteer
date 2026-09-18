@@ -1157,6 +1157,124 @@ class CRM_Volunteer_BAO_Project extends CRM_Volunteer_DAO_Project {
   }
 
   /**
+   * Everything the project workflow header and steps read for one project.
+   *
+   * The Angular workflow used to issue six or seven requests on every step
+   * change: the project, its needs, its assignments, its capacity, the
+   * supporting data and a two-step beneficiary name lookup. This bundles the
+   * same reads into one response. Each piece still comes from the guarded
+   * read it always came from, with $checkPermissions passed through, so the
+   * caller sees exactly what the separate calls would have returned.
+   *
+   * @param int $projectId
+   * @param bool $checkPermissions
+   *
+   * @return array
+   *   Keys: project, needs, assignments, capacity (NULL when the summary is
+   *   unavailable), supporting (workflow and project bundles) and
+   *   beneficiary_names.
+   *
+   * @throws CRM_Core_Exception
+   *   When the project does not exist or the caller may not edit it.
+   */
+  public static function getWorkflowContext($projectId, $checkPermissions = TRUE) {
+    $projectId = (int) $projectId;
+
+    $projects = \Civi\Api4\VolunteerProject::search($checkPermissions)
+      ->setContext('edit')
+      ->setFilters(array('id' => $projectId))
+      ->execute();
+    if (!count($projects)) {
+      throw new CRM_Core_Exception(
+        ts('The volunteer project does not exist.', array('domain' => 'org.civicrm.volunteer'))
+      );
+    }
+    $project = $projects->first();
+
+    $needs = \Civi\Api4\VolunteerNeed::get($checkPermissions)
+      ->addWhere('project_id', '=', $projectId)
+      ->addOrderBy('start_time', 'ASC')
+      ->addOrderBy('id', 'ASC')
+      ->execute()
+      ->getArrayCopy();
+
+    $assignments = \Civi\Api4\VolunteerAssignment::get($checkPermissions)
+      ->addWhere('project_id', '=', $projectId)
+      ->execute()
+      ->getArrayCopy();
+
+    // The header falls back to counting the rows above when the summary is
+    // unavailable, so a failure here degrades rather than aborts.
+    try {
+      $capacity = CRM_Volunteer_BAO_Assignment::getCapacitySummary($projectId, $checkPermissions);
+    }
+    catch (CRM_Core_Exception $e) {
+      $capacity = NULL;
+    }
+
+    $supporting = array(
+      'workflow' => CRM_Volunteer_BAO_VolunteerUtil::getSupportingData('VolunteerWorkflow', $checkPermissions),
+      'project' => CRM_Volunteer_BAO_VolunteerUtil::getSupportingData('VolunteerProject', $checkPermissions),
+    );
+
+    return array(
+      'project' => $project,
+      'needs' => array_values($needs),
+      'assignments' => array_values($assignments),
+      'capacity' => $capacity,
+      'supporting' => $supporting,
+      'beneficiary_names' => self::getBeneficiaryDisplayNames($projectId, $checkPermissions),
+    );
+  }
+
+  /**
+   * Display names of a project's beneficiaries, for the workflow header.
+   *
+   * A name the caller may not read is left out; if the contact read fails
+   * outright every beneficiary is labelled by ID instead so the header still
+   * shows that the project has beneficiaries.
+   *
+   * @param int $projectId
+   * @param bool $checkPermissions
+   * @return string[]
+   */
+  private static function getBeneficiaryDisplayNames($projectId, $checkPermissions) {
+    $beneficiaryTypeId = CRM_Core_PseudoConstant::getKey(
+      'CRM_Volunteer_BAO_ProjectContact',
+      'relationship_type_id',
+      'volunteer_beneficiary'
+    );
+    if (!$beneficiaryTypeId) {
+      return array();
+    }
+    $rows = \Civi\Api4\VolunteerProjectContact::get($checkPermissions)
+      ->addSelect('contact_id')
+      ->addWhere('project_id', '=', (int) $projectId)
+      ->addWhere('relationship_type_id', '=', (int) $beneficiaryTypeId)
+      ->execute();
+    $contactIds = array();
+    foreach ($rows as $row) {
+      $contactIds[] = (int) $row['contact_id'];
+    }
+    $contactIds = array_values(array_unique($contactIds));
+    if (!$contactIds) {
+      return array();
+    }
+    try {
+      $contacts = \Civi\Api4\Contact::get($checkPermissions)
+        ->addSelect('id', 'display_name')
+        ->addWhere('id', 'IN', $contactIds)
+        ->execute();
+    }
+    catch (\Throwable $e) {
+      return array_map(function($contactId) {
+        return ts('Contact %1', array(1 => $contactId, 'domain' => 'org.civicrm.volunteer'));
+      }, $contactIds);
+    }
+    return array_values($contacts->column('display_name'));
+  }
+
+  /**
    * Return the location choices which are valid for a project editor.
    */
   public static function getLocationOptions($projectId = NULL, $checkPermissions = TRUE) {
@@ -2283,8 +2401,17 @@ class CRM_Volunteer_BAO_Project extends CRM_Volunteer_DAO_Project {
 
     // The default_profiles setting has no static default (see
     // settings/volunteer.setting.php), so resolve the shipped volunteer_sign_up
-    // profile here when an administrator has not chosen one.
-    if (empty($profileByType)) {
+    // profile here when an administrator has not chosen one. "Not chosen"
+    // includes the shape the settings form stores when every audience is left
+    // blank -- an array of empty lists -- not only a missing setting.
+    $hasChosenProfile = FALSE;
+    foreach ((array) $profileByType as $profileForType) {
+      if (!empty($profileForType)) {
+        $hasChosenProfile = TRUE;
+        break;
+      }
+    }
+    if (!$hasChosenProfile) {
       $signupProfileId = self::getDefaultSignupProfileId();
       if ($signupProfileId) {
         $profileByType = array('primary' => array($signupProfileId));

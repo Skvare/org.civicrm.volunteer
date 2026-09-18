@@ -1,10 +1,5 @@
-.crm-vol-hours-report {
-  --crm-vol-hours-border: var(--crm-border-color, #d5dee8);
-  --crm-vol-hours-panel: var(--crm-layer1-bg-color, #f6f8fa);
-}
-
 .crm-vol-hours-filters {
-  border: 1px solid var(--crm-vol-hours-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 4px);
   margin-bottom: 1.25rem;
   padding: .75rem 1rem 1rem;
@@ -22,12 +17,12 @@
 
 .crm-vol-hours-kpi-table th,
 .crm-vol-hours-kpi-table td {
-  border: 1px solid var(--crm-vol-hours-border);
+  border: 1px solid var(--crm-vol-border);
   text-align: center;
 }
 
 .crm-vol-hours-kpi-table th {
-  background: var(--crm-vol-hours-panel);
+  background: var(--crm-vol-panel);
   border-bottom: 0;
   font-weight: 600;
   padding: .65rem .5rem .2rem;

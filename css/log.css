@@ -1,15 +1,11 @@
 .crm-container .crm-vol-log-hours {
-  --crm-vol-log-border: var(--crm-border-color, #c2c0c0);
-  --crm-vol-log-surface: var(--crm-layer1-bg-color, #eaeaea);
-  --crm-vol-log-subtle: var(--crm-layer2-bg-color, #f5f5f5);
-  --crm-vol-log-muted: var(--crm-inactive-color, #696969);
   color: var(--crm-text-color, #464354);
 }
 
 .crm-container .crm-vol-log-context {
   align-items: center;
-  background: var(--crm-vol-log-surface);
-  border-color: var(--crm-vol-log-border);
+  background: var(--crm-vol-panel);
+  border-color: var(--crm-vol-border);
   display: flex;
   gap: var(--crm-l-reg, 1rem);
   justify-content: space-between;
@@ -23,12 +19,12 @@
 }
 
 .crm-container .crm-vol-log-context p {
-  color: var(--crm-vol-log-muted);
+  color: var(--crm-vol-muted);
   margin-top: var(--crm-l-small, .25rem);
 }
 
 .crm-container .crm-vol-eyebrow {
-  color: var(--crm-vol-log-muted);
+  color: var(--crm-vol-muted);
   display: block;
   font-size: var(--crm-font-small-size, .75rem);
   font-weight: 700;
@@ -40,7 +36,7 @@
 .crm-container .crm-vol-log-row-summary {
   align-items: center;
   background: var(--crm-page-bg-color, #fff);
-  border: 1px solid var(--crm-vol-log-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: 999px;
   display: flex;
   flex: 0 0 auto;
@@ -67,8 +63,8 @@
 
 .crm-container .crm-vol-log-toolbar {
   align-items: center;
-  background: var(--crm-vol-log-subtle);
-  border: 1px solid var(--crm-vol-log-border);
+  background: var(--crm-vol-panel-subtle);
+  border: 1px solid var(--crm-vol-border);
   border-bottom: 0;
   border-radius: var(--crm-l-radius, .25rem) var(--crm-l-radius, .25rem) 0 0;
   display: flex;
@@ -87,7 +83,7 @@
 .crm-container button.crm-vol-remove-row {
   align-items: center;
   background: var(--crm-page-bg-color, #fff);
-  border: 1px solid var(--crm-vol-log-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: var(--crm-btn-radius, 3px);
   color: var(--crm-link-color, #2c789b);
   display: inline-flex;
@@ -107,13 +103,13 @@
 .crm-container button.crm-vol-add-row:focus,
 .crm-container button.crm-vol-remove-row:hover,
 .crm-container button.crm-vol-remove-row:focus {
-  background: var(--crm-vol-log-surface);
+  background: var(--crm-vol-panel);
   border-color: var(--crm-primary-color, #696969);
   color: var(--crm-primary-ink-color, #464354);
 }
 
 .crm-container .crm-vol-log-table {
-  border: 1px solid var(--crm-vol-log-border);
+  border: 1px solid var(--crm-vol-border);
   display: block;
   margin: 0 0 var(--crm-l-medium, .5rem);
   overflow: visible;
@@ -137,19 +133,19 @@
 }
 
 .crm-container .crm-vol-log-header {
-  background: var(--crm-vol-log-surface);
-  border-bottom: 2px solid var(--crm-vol-log-border);
+  background: var(--crm-vol-panel);
+  border-bottom: 2px solid var(--crm-vol-border);
   font-weight: 700;
 }
 
 .crm-container .crm-vol-log-header small {
-  color: var(--crm-vol-log-muted);
+  color: var(--crm-vol-muted);
   font-weight: 400;
 }
 
 .crm-container .crm-vol-log-entry.crm-grid-row {
   background: var(--crm-page-bg-color, #fff);
-  border-bottom: 1px solid var(--crm-vol-log-border);
+  border-bottom: 1px solid var(--crm-vol-border);
 }
 
 .crm-container .crm-vol-log-entry.crm-grid-row:last-child {
@@ -157,7 +153,7 @@
 }
 
 .crm-container .crm-vol-log-entry.even-row.crm-grid-row {
-  background: var(--crm-vol-log-subtle);
+  background: var(--crm-vol-panel-subtle);
 }
 
 .crm-container .crm-vol-log-table .crm-grid-cell {
@@ -177,8 +173,8 @@
 
 .crm-container .crm-vol-log-table input[disabled],
 .crm-container .crm-vol-log-table input[readonly] {
-  background: var(--crm-vol-log-surface);
-  color: var(--crm-vol-log-muted);
+  background: var(--crm-vol-panel);
+  color: var(--crm-vol-muted);
 }
 
 .crm-container .crm-vol-input-suffix {
@@ -188,7 +184,7 @@
 }
 
 .crm-container .crm-vol-input-suffix > span {
-  color: var(--crm-vol-log-muted);
+  color: var(--crm-vol-muted);
   font-size: var(--crm-font-small-size, .75rem);
 }
 
@@ -233,7 +229,7 @@
 
 .crm-container .crm-vol-log-submit {
   background: var(--crm-page-bg-color, #fff);
-  border-top: 1px solid var(--crm-vol-log-border);
+  border-top: 1px solid var(--crm-vol-border);
   bottom: 0;
   justify-content: flex-end;
   margin-top: var(--crm-l-reg, 1rem);
@@ -277,7 +273,7 @@
   }
 
   .crm-container .crm-vol-log-table .crm-grid-cell::before {
-    color: var(--crm-vol-log-muted);
+    color: var(--crm-vol-muted);
     content: attr(data-label);
     font-size: var(--crm-font-small-size, .75rem);
     font-weight: 700;

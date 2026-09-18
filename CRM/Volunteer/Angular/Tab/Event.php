@@ -43,13 +43,11 @@ class CRM_Volunteer_Angular_Tab_Event extends CRM_Core_Page {
     $event = $project->getEntityAttributes();
 
     CRM_Core_Resources::singleton()
-        // css/volunteer_app.css is not loaded here any more. Its 700-odd lines
-        // style the #crm-volunteer-dialog and #crm-volunteer-search-dialog
-        // Marionette regions, none of which exist on this tab, and the workflow
-        // dialogs' own chrome now ships with the Angular bundle. This hook fires
-        // from CRM_Event_Form_ManageEvent::buildQuickForm(), i.e. on *every*
-        // event-configuration screen, so the stylesheet was being injected into
-        // Info, Location, Fees, Registration and Reminders as well.
+        // Only the tab's own stylesheet is added here. This hook fires from
+        // CRM_Event_Form_ManageEvent::buildQuickForm(), i.e. on *every*
+        // event-configuration screen (Info, Location, Fees, Registration,
+        // Reminders), so anything added here is injected into all of them; the
+        // workflow dialogs' chrome ships with the Angular bundle instead.
         ->addStyleFile('org.civicrm.volunteer', 'css/volunteer_events.css')
         ->addVars('org.civicrm.volunteer', array(
           'hash' => '#/volunteer/manage/' . $project->id . '/details',

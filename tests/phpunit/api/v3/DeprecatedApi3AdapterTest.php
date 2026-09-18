@@ -149,7 +149,6 @@ class api_v3_DeprecatedApi3AdapterTest extends VolunteerTestAbstract {
       'project contact get' => array('VolunteerProjectContact', 'get', 'VolunteerProjectContact', 'get'),
       'project contact delete' => array('VolunteerProjectContact', 'delete', 'VolunteerProjectContact', 'delete'),
       'commendation get' => array('VolunteerCommendation', 'get', 'VolunteerCommendation', 'get'),
-      'util loadbackbone' => array('VolunteerUtil', 'loadbackbone', 'VolunteerUtil', 'loadBackbone'),
       'util getperms' => array('VolunteerUtil', 'getperms', 'VolunteerUtil', 'getPermissions'),
       'util getprofiles' => array('VolunteerUtil', 'getprofiles', 'VolunteerUtil', 'getProfiles'),
       'util getsupportingdata' => array('VolunteerUtil', 'getsupportingdata', 'VolunteerUtil', 'getSupportingData'),

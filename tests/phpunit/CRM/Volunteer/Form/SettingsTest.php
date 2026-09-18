@@ -25,6 +25,7 @@ class CRM_Volunteer_Form_SettingsTest extends VolunteerTestAbstract {
       'volunteer_general_campaign_filter_type' => 'blacklist',
       'volunteer_general_campaign_filter_list' => array(),
       'volunteer_project_default_is_active' => 0,
+      'volunteer_use_backend_theme' => 1,
     );
     foreach (array('volunteer_owner', 'volunteer_manager', 'volunteer_beneficiary') as $relationship) {
       $baseline["volunteer_project_default_contacts_mode_$relationship"] = 'acting_contact';
@@ -133,6 +134,53 @@ class CRM_Volunteer_Form_SettingsTest extends VolunteerTestAbstract {
       ->execute()
       ->first()['value'];
     $this->assertSame(0, (int) $isActive, 'An unchecked default must overwrite the stored 1.');
+  }
+
+  /**
+   * Field descriptions come from the settings metadata's help_text, which
+   * core now stores as an array of paragraphs. The template prints a string,
+   * so the form must flatten it rather than render "Array".
+   */
+  public function testFieldDescriptionsAreStrings(): void {
+    $form = $this->buildForm();
+    $descriptions = $form->get_template_vars('fieldDescriptions');
+    $this->assertArrayHasKey('volunteer_use_backend_theme', $descriptions);
+    $this->assertArrayHasKey('volunteer_general_campaign_filter_list', $descriptions);
+    foreach ($descriptions as $name => $description) {
+      $this->assertIsString($description, "$name description must be a string.");
+      $this->assertNotSame('Array', $description);
+      $this->assertNotSame('', trim($description));
+    }
+    $this->assertStringContainsString('frontend theme', $descriptions['volunteer_use_backend_theme']);
+  }
+
+  /**
+   * The public-theme switch round-trips through the form: checked stores 1,
+   * an absent (unchecked) box stores 0 rather than leaving the old value.
+   */
+  public function testPostProcessStoresTheBackendThemeSwitch(): void {
+    $read = function() {
+      return (int) \Civi\Api4\Setting::get(FALSE)
+        ->addSelect('volunteer_use_backend_theme')
+        ->execute()
+        ->first()['value'];
+    };
+
+    $form = $this->buildForm(array('volunteer_use_backend_theme' => 1));
+    $form->postProcess();
+    $this->assertSame(1, $read());
+
+    $form = $this->buildForm();
+    $submitValues = new ReflectionProperty('HTML_QuickForm', '_submitValues');
+    $submitValues->setAccessible(TRUE);
+    $values = $submitValues->getValue($form);
+    unset($values['volunteer_use_backend_theme']);
+    $submitValues->setValue($form, $values);
+    $form->postProcess();
+    $this->assertSame(0, $read(), 'An unchecked box must store 0.');
+
+    $defaults = $this->buildForm()->setDefaultValues();
+    $this->assertSame(0, (int) $defaults['volunteer_use_backend_theme'], 'The form reads the stored value back.');
   }
 
 }

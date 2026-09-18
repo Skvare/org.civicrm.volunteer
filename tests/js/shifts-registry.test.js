@@ -1,142 +1,24 @@
 'use strict';
 
-// Behavioral checks for the VolunteerShifts controller in ang/volunteer/Shifts.js.
-// The volShiftFilters factory half of the file is covered by
-// shift-filter.test.js; this file captures the controller registration with a
-// fake angular module, then invokes it with a mock $scope, a native-promise $q
-// and a recording APIv4 stub (always injected under the name crmApi4).
+// Behavioral checks for the VolunteerShifts controller in ang/volunteer/Shifts.js:
+// the API values written per schedule mode, the session need registry the
+// close-dialog consumers read, the per-row save queue, duplication, the custom
+// date range and the continue/close gates. The volShiftFilters factory half of
+// the file is covered by shift-filter.test.js.
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const {
+  makeAngular, makeUnderscore, makeCRM, makeQ, makeApi, settle, deepEqual, loadInNewContext,
+} = require('./harness');
 
-const extensionRoot = path.resolve(__dirname, '..', '..');
-const source = fs.readFileSync(path.join(extensionRoot, 'ang/volunteer/Shifts.js'), 'utf8');
-
-const factories = {};
-const controllers = {};
-const moduleApi = {
-  factory(name, factory) { factories[name] = factory; return moduleApi; },
-  controller(name, controller) { controllers[name] = controller; return moduleApi; },
-};
-const angular = {
-  module() { return moduleApi; },
-  copy(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); },
-  forEach(object, fn) {
-    if (object === null || object === undefined) { return; }
-    if (Array.isArray(object)) { object.forEach(fn); }
-    else { Object.keys(object).forEach((key) => fn(object[key], key)); }
-  },
-  noop() {},
-};
-
-function makeUnderscore() {
-  const wrap = (value) => ({
-    value,
-    map(fn) { return wrap(value.map(fn)); },
-    filter(fn) { return wrap(value.filter(fn)); },
-    first(count) { return wrap(value.slice(0, count)); },
-    uniq() { return wrap(Array.from(new Set(value))); },
-    value() { return value; },
-  });
-  return {
-    chain: wrap,
-    isArray: Array.isArray,
-    keys: Object.keys,
-    values: (object) => Object.values(object || {}),
-    size: (object) => Object.keys(object || {}).length,
-    map: (list, fn) => (list || []).map(fn),
-    filter: (list, fn) => (list || []).filter(fn),
-    find: (list, fn) => (Array.isArray(list) ? list.find(fn) : Object.values(list || {}).find(fn)),
-    findWhere: (list, props) => (list || []).find(
-      (item) => Object.keys(props).every((key) => item[key] === props[key])
-    ),
-    where: (list, props) => (list || []).filter(
-      (item) => Object.keys(props).every((key) => item[key] === props[key])
-    ),
-    some: (list, fn) => (list || []).some(fn),
-    every: (list, fn) => (list || []).every(fn),
-    reduce: (object, fn, initial) => Object.keys(object || {}).reduce(
-      (acc, key) => fn(acc, object[key], key), initial
-    ),
-    without: (list, ...removed) => (list || []).filter((item) => removed.indexOf(item) < 0),
-    pluck: (list, key) => (list || []).map((item) => item[key]),
-    countBy: (list, key) => (list || []).reduce((acc, item) => {
-      const group = item[key];
-      acc[group] = (acc[group] || 0) + 1;
-      return acc;
-    }, {}),
-  };
-}
-
+const {angular, registry} = makeAngular();
 const underscore = makeUnderscore();
-const alerts = [];
-const confirmations = [];
-const CRM = {
-  $: () => ({trigger() {}}),
-  _: underscore,
-  ts: () => (text, params) => String(text).replace(
-    /%1/g, params && params[1] !== undefined ? String(params[1]) : '%1'
-  ),
-  alert: (message, title, type) => alerts.push({message, title, type}),
-  confirm: (options) => ({
-    on(event, callback) {
-      if (event === 'crmConfirm:yes') { confirmations.push({options, callback}); }
-      return this;
-    },
-  }),
-  vars: {},
-};
+const {CRM, alerts, confirmations} = makeCRM({_: underscore});
+loadInNewContext('ang/volunteer/Shifts.js', {angular, CRM, _: underscore});
+const controllers = registry.controllers;
 
-vm.runInNewContext(source, {angular, Date, CRM, jQuery: {}, _: underscore});
-
-const shiftFilters = factories.volShiftFilters();
+const shiftFilters = registry.factories.volShiftFilters();
 assert.strictEqual(typeof controllers.VolunteerShifts, 'function');
-
-function makeQ() {
-  const all = (work) => {
-    if (Array.isArray(work)) { return Promise.all(work); }
-    const keys = Object.keys(work);
-    return Promise.all(keys.map((key) => work[key])).then((values) => {
-      const result = {};
-      keys.forEach((key, index) => { result[key] = values[index]; });
-      return result;
-    });
-  };
-  const deferred = () => {
-    const result = {};
-    result.promise = new Promise((resolve, reject) => {
-      result.resolve = resolve;
-      result.reject = reject;
-    });
-    return result;
-  };
-  return {resolve: (value) => Promise.resolve(value), reject: (error) => Promise.reject(error), defer: deferred, all};
-}
-
-function makeApi() {
-  const calls = [];
-  const responses = [];
-  const crmApi4 = (entity, action, params) => {
-    calls.push({entity, action, params});
-    const response = responses.length ? responses.shift() : {rows: [{}]};
-    if (response.deferred) {
-      Object.assign(response.deferred, makeQ().defer());
-      return response.deferred.promise;
-    }
-    return response.error ? Promise.reject(response.error) : Promise.resolve(response.rows);
-  };
-  return {crmApi4, calls, responses};
-}
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-// Values produced inside the vm context carry the vm realm's prototypes, so
-// deep comparisons go through a host-realm round trip first.
-const deepEqual = (actual, expected, message) => assert.deepStrictEqual(
-  JSON.parse(JSON.stringify(actual)), expected, message
-);
 
 function makeWorkflowStub(context) {
   const navigations = [];
@@ -226,8 +108,6 @@ const visibleIds = (scope) => scope.visibleNeeds.map((row) => row.id);
     api.responses.push({rows: [{id: 8}]});
     scope.saveNeed(need({
       id: 8, schedule_mode: 'ongoing', start_time: null, end_time: '2026-12-01 10:00:00',
-
-
       duration: 45, public: false, accepting: false,
     }));
     const after = todayAtMidnightString();
@@ -278,8 +158,8 @@ const visibleIds = (scope) => scope.visibleNeeds.map((row) => row.id);
   // -- markRegistry(): the session registry the close-dialog consumers read ----
 
   {
-    const registry = {clean: [], created: [], updated: [], deleted: []};
-    const {scope, api} = buildRegistry({model: {projectId: 42, needRegistry: registry}});
+    const registryState = {clean: [], created: [], updated: [], deleted: []};
+    const {scope, api} = buildRegistry({model: {projectId: 42, needRegistry: registryState}});
     await settle();
 
     // created stays created, even after further edits.
@@ -288,12 +168,12 @@ const visibleIds = (scope) => scope.visibleNeeds.map((row) => row.id);
     scope.saveNeed(fresh);
     await settle();
     assert.strictEqual(fresh.id, 55);
-    deepEqual(registry.created, [55]);
+    deepEqual(registryState.created, [55]);
     api.responses.push({rows: [{id: 55}]});
     scope.saveNeed(fresh);
     await settle();
-    deepEqual(registry.created, [55], 'a session-created need stays reported as created');
-    deepEqual(registry.updated, [], 're-editing a created need must not move it to updated');
+    deepEqual(registryState.created, [55], 'a session-created need stays reported as created');
+    deepEqual(registryState.updated, [], 're-editing a created need must not move it to updated');
 
     // clean moves to updated.
     const edited = {clean: [7], created: [], updated: [], deleted: []};
@@ -314,7 +194,7 @@ const visibleIds = (scope) => scope.visibleNeeds.map((row) => row.id);
       ],
       assignments: [{volunteer_need_id: 7}, {volunteer_need_id: 7}],
     };
-    const third = buildRegistry({model: {projectId: 42, needRegistry: registry}, context});
+    const third = buildRegistry({model: {projectId: 42, needRegistry: registryState}, context});
     await settle();
     const doomed = third.scope.needs[0];
     assert.strictEqual(doomed.assignment_count, 2);
@@ -329,9 +209,9 @@ const visibleIds = (scope) => scope.visibleNeeds.map((row) => row.id);
     await settle();
     deepEqual(third.scope.needs, [], 'the deleted need leaves the list');
     deepEqual(visibleIds(third.scope), []);
-    deepEqual(registry.deleted, [7]);
+    deepEqual(registryState.deleted, [7]);
     assert.strictEqual(
-      [registry.clean, registry.created, registry.updated]
+      [registryState.clean, registryState.created, registryState.updated]
         .filter((list) => list.indexOf(7) >= 0).length,
       0,
       'a deleted id belongs to the deleted list only'

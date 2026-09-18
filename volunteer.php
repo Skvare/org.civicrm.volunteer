@@ -47,6 +47,11 @@ function volunteer_civicrm_config(&$config) {
  * screens look unrelated. Keep the public semantics while giving the complete
  * CiviVolunteer workflow the theme selected for CiviCRM's backend screens.
  *
+ * The volunteer_use_backend_theme setting turns this off for sites whose
+ * public CiviCRM pages must follow the frontend theme. An unknown value --
+ * the settings metadata has not been reloaded since the upgrade -- keeps the
+ * override on, which is the behaviour every earlier 2.5 build had.
+ *
  * @param string $theme
  * @param array $context
  *
@@ -55,6 +60,11 @@ function volunteer_civicrm_config(&$config) {
 function volunteer_civicrm_activeTheme(&$theme, $context) {
   $path = trim((string) ($context['page'] ?? ''), '/');
   if (!preg_match('#^civicrm/(?:vol(?:/|$)|volunteer(?:/|$))#', $path)) {
+    return;
+  }
+
+  $useBackendTheme = Civi::settings()->get('volunteer_use_backend_theme');
+  if ($useBackendTheme !== NULL && !$useBackendTheme) {
     return;
   }
 

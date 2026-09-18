@@ -1,7 +1,4 @@
 .crm-container .crm-vol-roster {
-  --crm-vol-roster-border: var(--crm-border-color, #d8dde5);
-  --crm-vol-roster-surface: var(--crm-layer1-bg-color, #f6f8fa);
-  --crm-vol-roster-muted: var(--crm-inactive-color, #56616f);
   color: var(--crm-text-color, #27313d);
 }
 
@@ -11,8 +8,8 @@
 
 .crm-container .crm-vol-roster-summary {
   align-items: center;
-  background: var(--crm-vol-roster-surface);
-  border: 1px solid var(--crm-vol-roster-border);
+  background: var(--crm-vol-panel);
+  border: 1px solid var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 4px);
   display: flex;
   gap: var(--crm-l-reg, 16px);
@@ -34,7 +31,7 @@
 .crm-container .crm-vol-roster-count {
   align-items: center;
   background: var(--crm-page-bg-color, #fff);
-  border: 1px solid var(--crm-vol-roster-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: 999px;
   display: inline-flex;
   font-size: var(--crm-font-small-size, 13px);
@@ -52,7 +49,7 @@
 }
 
 .crm-container .crm-vol-roster-shift {
-  border-color: var(--crm-vol-roster-border);
+  border-color: var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 4px);
   box-shadow: none;
   margin-bottom: var(--crm-l-reg, 16px);
@@ -60,8 +57,8 @@
 }
 
 .crm-container .crm-vol-roster-shift > .panel-heading {
-  background: var(--crm-vol-roster-surface);
-  border-color: var(--crm-vol-roster-border);
+  background: var(--crm-vol-panel);
+  border-color: var(--crm-vol-border);
   padding: var(--crm-l-reg, 16px);
 }
 
@@ -89,7 +86,7 @@
 
 .crm-container .crm-vol-roster-table th,
 .crm-container .crm-vol-roster-table td {
-  border-color: var(--crm-vol-roster-border);
+  border-color: var(--crm-vol-border);
   padding: var(--crm-l-reg, 16px);
   text-align: left;
   vertical-align: top;
@@ -131,14 +128,14 @@
 
 .crm-container .crm-vol-roster-contact-values small,
 .crm-container .crm-vol-roster-muted {
-  color: var(--crm-vol-roster-muted);
+  color: var(--crm-vol-muted);
 }
 
 .crm-container a.crm-vol-roster-action.crm-hover-button,
 .crm-container button.crm-vol-roster-action {
   align-items: center;
   background: var(--crm-page-bg-color, #fff);
-  border: 1px solid var(--crm-vol-roster-border);
+  border: 1px solid var(--crm-vol-border);
   border-radius: var(--crm-l-radius, 4px);
   box-shadow: none;
   color: var(--crm-link-color, #0563c1);
@@ -176,7 +173,7 @@
 }
 
 .crm-container .crm-vol-roster-footer {
-  border-top: 1px solid var(--crm-vol-roster-border);
+  border-top: 1px solid var(--crm-vol-border);
   justify-content: flex-end;
   margin-top: var(--crm-l-reg, 16px);
   padding-top: var(--crm-l-reg, 16px);
@@ -230,7 +227,7 @@
   }
 
   .crm-container .crm-vol-roster-table tr {
-    border-bottom: 1px solid var(--crm-vol-roster-border);
+    border-bottom: 1px solid var(--crm-vol-border);
     padding: var(--crm-l-medium, 8px) 0;
   }
 
@@ -250,7 +247,7 @@
   }
 
   .crm-container .crm-vol-roster-table td::before {
-    color: var(--crm-vol-roster-muted);
+    color: var(--crm-vol-muted);
     content: attr(data-label);
     font-size: var(--crm-font-small-size, 13px);
     font-weight: 600;
